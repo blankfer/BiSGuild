@@ -1184,8 +1184,13 @@ do
     local f = K.Show()
     H.ok(f and f:IsShown(), "the terminal opens")
     H.eq(K.page, "raiders", "it opens on the raiders")
-    H.ok(f.pages.raiders.panel.hint:IsShown(), "an empty list says why")
-    H.ok(f.pages.raiders.panel.hint:GetText():find("LOG", 1, true), "and where the nights come from")
+    -- the guild is listed (Kumlust, no raids): the long hint would print THROUGH his row (Arn, 5 Nov
+    -- screenshot) - so the panel keeps its rows and the status line says where nights come from
+    H.ok(f.pages.raiders.grid.rows[1]:IsShown(), "the guild is listed with no nights")
+    H.ok(not f.pages.raiders.panel.hint:IsShown(), "so no hint over the rows")
+    H.ok(f.pages.raiders.panel.hint:GetText():find("LOG", 1, true), "the hint, for an empty list, says where the nights come from")
+    f.keys.raiders:Click()
+    H.ok(f.status:GetText():find("LOG tab", 1, true), "the status line says it instead", f.status:GetText())
     -- Arn, 16 Oct: clicking BOSSES on a fresh install did "nothing" - it must open its own page
     f.keys.bosses:Click()
     H.eq(K.page, "bosses", "the BOSSES tab opens the bosses, even empty")

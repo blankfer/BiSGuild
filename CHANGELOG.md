@@ -1,5 +1,9 @@
 # BiSGuild
 
+## 0.5.2
+
+- **No more text over the raider list.** Before your guild's first logged raid, the RAIDERS tab printed its "no raid nights yet" note straight through the guild's names. The note now goes on the line above the list.
+
 ## 0.5.1
 
 - **The Deeprun Tram's timetable, for the whole guild.** With the shared BiS lib's new version, riding the Deeprun Tram with any BiS addon times it for your guild, the way the zeppelins and boats already are - BiS Tools' ride card and BiS Shell's TRAM-TRAK read it.
