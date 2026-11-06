@@ -1459,6 +1459,20 @@ do
         for i, l in ipairs(wp.labels) do if wp.dots[i]:IsShown() then labels[#labels + 1] = l:GetText() end end
         table.sort(labels)
         H.ok(deq(labels, { "Bob", "you" }), "each dot named, mine as 'you'", table.concat(labels, ","))
+        -- A DOT'S BLACK EDGE GOES WITH IT (Arn, 5 Nov: two black squares stayed on every map after
+        -- Durotar's). The edge is its own texture: hiding a texture never hides one anchored to it.
+        local edgesUp = 0
+        for _, d in ipairs(wp.dots) do if d.edge:IsShown() then edgesUp = edgesUp + 1 end end
+        H.eq(edgesUp, 2, "two dots, two black edges")
+        local keepOnMap = Wh.OnMap
+        Wh.OnMap = function() return nil end              -- another map: nobody on it
+        K.Paint()
+        Wh.OnMap = keepOnMap
+        H.eq(wp.map.right:GetText(), "0 dots", "a map with nobody on it")
+        edgesUp = 0
+        for _, d in ipairs(wp.dots) do if d.edge:IsShown() then edgesUp = edgesUp + 1 end end
+        H.eq(edgesUp, 0, "and no black edge left behind")
+        K.Paint()
 
         -- THE LITTLE FIGURES (Arn: "actual size so very tiny maybe like 10 pixels max"; "store ... when they
         -- party or raid and are near us and keep that until next time we see them") - a stand-in of their

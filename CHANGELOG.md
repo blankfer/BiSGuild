@@ -3,6 +3,7 @@
 ## 0.5.2
 
 - **No more text over the raider list.** Before your guild's first logged raid, the RAIDERS tab printed its "no raid nights yet" note straight through the guild's names. The note now goes on the line above the list.
+- **No black squares left on the WHERE map.** After looking at a map with dots on it, switching to another map left small black squares where those dots had been. They now go with their dots.
 
 ## 0.5.1
 

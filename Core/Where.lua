@@ -582,7 +582,8 @@ function K.PaintWhere(p)
     p.open.fs:SetText(W.OpenMapHere() and (W.focus and "ZOOM IN OPENMAP" or "OPEN IN OPENMAP") or "OPEN WORLD MAP")
     if map then p.open:Show() else p.open:Hide() end
     for _, t in ipairs(p.tiles) do t:Hide() end
-    for i, d in ipairs(p.dots) do d:Hide() p.labels[i]:Hide() end
+    -- the edge is its own texture: hiding the dot leaves it drawn (Arn, 5 Nov: black squares on every map)
+    for i, d in ipairs(p.dots) do d:Hide() d.edge:Hide() p.labels[i]:Hide() end
     for _, fg in ipairs(p.figs or {}) do fg:Hide() end
     local figs, Lk = 0, ns.Looks
 
@@ -641,6 +642,7 @@ function K.PaintWhere(p)
                     d:ClearAllPoints()
                     d:SetPoint("CENTER", p.land, "TOPLEFT", px, -py)
                     d:Show()
+                    d.edge:Show()
                     if display then
                         figs = figs + 1
                         local fg = Fig(p, figs)
