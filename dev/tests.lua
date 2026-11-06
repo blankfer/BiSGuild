@@ -1184,8 +1184,13 @@ do
     local f = K.Show()
     H.ok(f and f:IsShown(), "the terminal opens")
     H.eq(K.page, "raiders", "it opens on the raiders")
-    H.ok(f.pages.raiders.panel.hint:IsShown(), "an empty list says why")
-    H.ok(f.pages.raiders.panel.hint:GetText():find("LOG", 1, true), "and where the nights come from")
+    -- the guild is listed (Kumlust, no raids): the long hint would print THROUGH his row (Arn, 5 Nov
+    -- screenshot) - so the panel keeps its rows and the status line says where nights come from
+    H.ok(f.pages.raiders.grid.rows[1]:IsShown(), "the guild is listed with no nights")
+    H.ok(not f.pages.raiders.panel.hint:IsShown(), "so no hint over the rows")
+    H.ok(f.pages.raiders.panel.hint:GetText():find("LOG", 1, true), "the hint, for an empty list, says where the nights come from")
+    f.keys.raiders:Click()
+    H.ok(f.status:GetText():find("LOG tab", 1, true), "the status line says it instead", f.status:GetText())
     -- Arn, 16 Oct: clicking BOSSES on a fresh install did "nothing" - it must open its own page
     f.keys.bosses:Click()
     H.eq(K.page, "bosses", "the BOSSES tab opens the bosses, even empty")
@@ -1454,6 +1459,20 @@ do
         for i, l in ipairs(wp.labels) do if wp.dots[i]:IsShown() then labels[#labels + 1] = l:GetText() end end
         table.sort(labels)
         H.ok(deq(labels, { "Bob", "you" }), "each dot named, mine as 'you'", table.concat(labels, ","))
+        -- A DOT'S BLACK EDGE GOES WITH IT (Arn, 5 Nov: two black squares stayed on every map after
+        -- Durotar's). The edge is its own texture: hiding a texture never hides one anchored to it.
+        local edgesUp = 0
+        for _, d in ipairs(wp.dots) do if d.edge:IsShown() then edgesUp = edgesUp + 1 end end
+        H.eq(edgesUp, 2, "two dots, two black edges")
+        local keepOnMap = Wh.OnMap
+        Wh.OnMap = function() return nil end              -- another map: nobody on it
+        K.Paint()
+        Wh.OnMap = keepOnMap
+        H.eq(wp.map.right:GetText(), "0 dots", "a map with nobody on it")
+        edgesUp = 0
+        for _, d in ipairs(wp.dots) do if d.edge:IsShown() then edgesUp = edgesUp + 1 end end
+        H.eq(edgesUp, 0, "and no black edge left behind")
+        K.Paint()
 
         -- THE LITTLE FIGURES (Arn: "actual size so very tiny maybe like 10 pixels max"; "store ... when they
         -- party or raid and are near us and keep that until next time we see them") - a stand-in of their

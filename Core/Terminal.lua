@@ -946,8 +946,9 @@ local function PaintRaiders(p)
     end
     p.panel.right:SetText(("%d raiders, %s%d pugs, %d nights"):format(#rows - pugs - none,
         none > 0 and (none .. " no raids, ") or "", pugs, #S().Dates()) .. Showing(p.grid))
-    -- the hint says where nights come from while there are none, even with the guild listed
-    if #rows - none == 0 then p.panel.hint:Show() else p.panel.hint:Hide() end
+    -- the hint fills the panel only while the list is EMPTY: over listed rows it printed through the
+    -- names (Arn, 5 Nov). With the guild listed and no nights, the status line says where nights come from.
+    if #rows == 0 then p.panel.hint:Show() else p.panel.hint:Hide() end
     -- the sort you are on is lit
     p.grid.heads[1]:SetTextColor(rgb(K.sort ~= "attend" and "gold" or "muted"))
     p.grid.heads[3]:SetTextColor(rgb(K.sort == "attend" and "gold" or "muted"))
@@ -1312,7 +1313,11 @@ function K.Go(line)
         or kind == "recruits" then
         K.trail = {}                                   -- a list is the top: nothing behind it
         K.Open(kind)
-        Say((kind == "raiders" and "every raider - click one, or type a name   (click NAME or ATTEND to sort)")
+        -- no nights yet and the guild listed: the why goes on the status line, not over the rows
+        -- (Arn, 5 Nov screenshot: the hint printed straight through the guild's names)
+        Say((kind == "raiders" and #S().Dates() == 0
+                and "no raid nights yet - after a raid, the LOG tab reads your combat log   (click a name, or type one)")
+            or (kind == "raiders" and "every raider - click one, or type a name   (click NAME or ATTEND to sort)")
             or (kind == "report" and ("the raid team by class: who raided in the last %d raids, and who is on the roster"):format(K.REPORT_RAIDS))
             or (kind == "bosses" and "every boss - click one, or type a name")
             or (kind == "roster" and ("paste a roster, READ IT, INVITE - " .. (ns.Inv and ns.Inv.Tools()
