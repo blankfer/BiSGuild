@@ -37,8 +37,8 @@ Hover any item for its tooltip, enchant included. Right-click any name for the g
 ## Raid night, handled
 
 - **The raid at a glance.** Title, start time, a countdown, and how many sign-ups are online.
-- **A pop-up when a sign-up logs in**, with an invite button on it. From two hours before the raid until four hours after.
-- **Punctuality.** On time, late and by how long, or a no-show, kept raid after raid. "Late twice in eight" says more than one bad night. An invite that went out late is never held against the raider.
+- **A pop-up when a sign-up logs in**, with an invite button on it. From two hours before the raid until four hours after. Off until you switch it on (options, or `/bisg logins on`).
+- **Punctuality.** With the pop-up on: on time, late and by how long, or a no-show, kept raid after raid. "Late twice in eight" says more than one bad night. An invite that went out late is never held against the raider.
 - **Loot.** Every award goes into a tamper-evident ledger, kept per guild. `/bisl` shows it.
 
 ## Shared with your officers
@@ -66,7 +66,11 @@ Two officers who read the same raid end up with the same night: BiS Guild lines 
 - **Consumables**: at each pull, a flask (or a battle and a guardian elixir) and food.
 - **Gear**: what each raider wore at the pull, straight from the log. No inspecting.
 
-A 110 MB log takes seconds. Your copy also tells you when a guildmate runs a newer BiS Guild, so nobody stays behind.
+A 110 MB log takes seconds. `/biscomm ver` shows which BiS versions your guild runs; switch on the newer-version note and your copy says so in chat when a guildmate has a newer BiS Guild.
+
+## Starts quiet
+
+A new install starts with only its main job on: the terminal and the record. The login pop-up, guildmates' dots on the world map and the newer-version note wait for you to switch them on - in **Esc > Options > AddOns > BiS> > BiS> Guild**, or `/bisg options`. Already using BiS Guild? Everything stays as you had it.
 
 ## Works with
 
@@ -83,8 +87,10 @@ None of them is needed. BiS Guild works alone.
 |---|---|
 | `/bisg` | open the terminal |
 | `/bisg paste` | read a raid: the notebook's link, and its text in |
+| `/bisg options` | every switch, in one window |
 | `/bisg logins on` / `off` | the pop-up when a sign-up logs in |
 | `/bisg dots on` / `off` | guildmates on the world map |
+| `/bisg note on` / `off` | a chat line when a guildmate runs a newer version |
 | `/bisl` | the loot ledger |
 
 Part of the BiS family. Talks to the other BiS addons over one shared channel; `/biscomm off` silences it.
