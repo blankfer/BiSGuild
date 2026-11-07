@@ -1,5 +1,9 @@
 # BiSGuild
 
+## Unreleased
+
+- **Which BiS versions your guild runs:** `/biscomm ver` lists every BiS addon around you, who has the newest, and which release is marked critical. Nothing is said unless an update is critical (or your copy is too old to talk to a guildmate's) - then one line, once, never in a fight.
+
 ## 0.5.3
 
 - **Buttons and rows pop under the mouse** (a clearer tint and a bar on the left), and Escape closes the logins window.

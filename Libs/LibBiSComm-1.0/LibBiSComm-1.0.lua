@@ -24,7 +24,9 @@
 --
 -- House rules, in the lib so they cannot drift addon to addon:
 --   * draws nothing, prints nothing (one /biscomm for status and the off switch;
---     /bis belongs to LoonBestInSlot on the raid's clients - minor 4 gave it back)
+--     /bis belongs to LoonBestInSlot on the raid's clients - minor 4 gave it back) - the ONE exception, minor 18:
+--     a line when you are below a release marked critical, or too old to talk to a guildmate's lib
+--     (Arn: "we only alert for big critical updates or compatibility"); once a session, never in a fight
 --   * no periodic chatter: WHERE pushes on a real change, otherwise it answers
 --   * every host callback is pcall'd -- a lib fault cannot kill the addon
 --   * off means silent AND deaf
@@ -48,7 +50,12 @@
 --   + (23 Oct) the Deeprun Tram on the ride clock: two stops on lib.TRAM_MAP (no map in its zone - your world spot,
 --   lib:TramSpot), a dwell per stop, two cars half a loop apart (sched.cars); lib:RideSure - the confidence %, moved
 --   here from BiS Tools so every addon says the same number; Stormwind Harbor's Darkshore boat (sw_aub)
-local MAJOR, MINOR = "LibBiSComm-1.0", 17
+-- minor 18 (6 Nov 2026): VER - which BiS addons, which versions, across the GUILD and the group (MOD VER, guild-
+-- scoped: HAVE|libMinor|addonsBlob|criticalBlob|compatMin). lib:Versions() / /biscomm ver list who runs what; a
+-- release is marked critical by its TOC (## X-BiS-Critical: <version>) and that, or a lib too new to talk to us, is
+-- the only thing ever said. Said once a session, never in a fight; a late login is answered by whoever is newer,
+-- the first answer silencing the rest.
+local MAJOR, MINOR = "LibBiSComm-1.0", 18
 
 local lib = _G.LibBiSComm
 if lib and (lib.MINOR or 0) >= MINOR then return end   -- an equal or newer copy won
@@ -966,6 +973,7 @@ function lib:Boot()
     if self.StartSpots then self:StartSpots() end -- minor 12: guild spots
     if self.StartRides then self:StartRides() end -- minor 15: the ride clock
     if self.StartFojji then self:StartFojji() end -- minor 16: FojjiCore's Experience and Campfires windows
+    if self.StartVersions then self:StartVersions() end -- minor 18: who runs which version
 
     f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
         if event == "CHAT_MSG_ADDON" then
@@ -2470,6 +2478,199 @@ end
 if lib._booted then lib:StartFojji() end
 
 --------------------------------------------------------------------
+-- VER (minor 18): who runs which version - listed, and said only when it is critical
+--------------------------------------------------------------------
+-- Arn, 6 Nov 2026: "we should build it for our addons but only listing and we only alert for big critical updates
+-- or compatibility, i only really pay attention to the gargul or rclc before raid otherwise i ignore them" - and
+-- "yes with guild". An addon can never reach the internet; a newer version is known only because somebody near you
+-- runs it. So every BiS client says what it runs - once after login (VER_FIRST), on the GUILD and the group - and
+-- whoever runs something NEWER than a late arrival answers it, after a random wait, the first answer silencing the
+-- rest (a guild of forty logging in is not forty times forty). Nothing ticks.
+lib.vers = lib.vers or {}             -- sender -> { addons = {name = ver}, crit = {name = ver}, minor, compat, at }
+lib.versNewest = lib.versNewest or {} -- addon -> { ver, who } - the newest seen anywhere
+lib.versCrit = lib.versCrit or {}     -- addon -> the highest version anyone has marked critical
+lib.versTold = lib.versTold or {}     -- addon (or "_compat") -> said this session
+lib.VER_FIRST, lib.VER_GAP = 15, 300  -- seconds after login; the least gap between my own unasked lines
+lib.VER_WAIT = { 2, 10 }              -- an answer's random wait, seconds
+-- the oldest lib minor that can still talk to this one: a guildmate's says it, and ours below theirs is the only
+-- compatibility notice. 1 = every BiS lib so far.
+lib.COMPAT_MIN = 1
+
+local function verMeta(addon, key)
+    local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+    if type(get) ~= "function" or type(addon) ~= "string" then return nil end
+    local ok, v = pcall(get, addon, key)
+    if not ok or Secret(v) or type(v) ~= "string" or v == "" then return nil end
+    return v
+end
+
+local function verParse(blob)
+    local t = {}
+    for entry in string.gmatch(tostring(blob or ""), "([^,]+)") do
+        local n, v = string.match(entry, "^(.-)=(.*)$")
+        if n and n ~= "" and v and v ~= "" then t[n] = v end
+    end
+    return t
+end
+
+local function verBlob(t)
+    local out = {}
+    for n, v in pairs(t) do out[#out + 1] = n .. "=" .. v end
+    table.sort(out)
+    return table.concat(out, ",")
+end
+
+--- The criticals this client knows: its own addons' TOC marks, and any heard - passed on, so the word spreads even
+--- while the one who marked it is offline.
+function lib:CritKnown()
+    local t = {}
+    for n, v in pairs(self.versCrit) do t[n] = v end
+    for n in pairs(self.addons) do
+        local c = verMeta(n, "X-BiS-Critical")
+        if c and (not t[n] or lib.VersionGT(c, t[n])) then t[n] = c end
+    end
+    return t
+end
+
+function lib:VersionLine()
+    return self.MINOR, self:AddonsBlob(), verBlob(self:CritKnown()), self.COMPAT_MIN
+end
+
+--- Say what I run on the GUILD. Unasked, at most once a VER_GAP; `answer` = a late arrival needs it. The group is
+--- never sent this: it already has every version from HI (_VersionsFromPeer), and a group that stands still must
+--- cost nothing (raid25.lua: "zero messages in 600 s of nobody moving").
+function lib:SendVersions(answer)
+    local now = Now()
+    if not answer and self._verAt and now - self._verAt < self.VER_GAP then return false end
+    self._verAt = now
+    if not (IsInGuild and IsInGuild()) then return false end
+    return self:SendTo("GUILD", "VER", "HAVE", self:VersionLine())
+end
+
+--- A group member's versions come with their HI (CORE already carries every addon and version) - read, never asked
+--- again: a roster tick that changes nothing must cost nothing (raid25.lua holds that).
+function lib:_VersionsFromPeer(name, pr)
+    for n, v in pairs((pr and pr.addons) or {}) do
+        local nw = self.versNewest[n]
+        if v ~= "?" and (not nw or lib.VersionGT(v, nw.ver)) then self.versNewest[n] = { ver = v, who = name } end
+    end
+end
+
+--- What a line from `sender` teaches me, and whether I know better than them (they need an answer).
+function lib:_OnVersions(sender, minor, blob, crit, compat)
+    local r = { addons = verParse(blob), crit = verParse(crit), minor = tonumber(minor or "") or 0,
+                compat = tonumber(compat or "") or 0, at = Now() }
+    self.vers[sender] = r
+    for n, v in pairs(r.addons) do
+        local nw = self.versNewest[n]
+        if not nw or lib.VersionGT(v, nw.ver) then self.versNewest[n] = { ver = v, who = sender } end
+    end
+    for n, c in pairs(r.crit) do
+        if not self.versCrit[n] or lib.VersionGT(c, self.versCrit[n]) then self.versCrit[n] = c end
+    end
+    -- what I could teach them: a newer version of something they run, or a critical they have not heard
+    local teach = {}
+    local known = self:CritKnown()
+    for n, v in pairs(r.addons) do
+        local mine = self.addons[n]
+        if mine and lib.VersionGT(mine, v) then teach[n] = mine end
+        local c = known[n]
+        if c and lib.VersionGT(c, v) and not (r.crit[n] and not lib.VersionGT(c, r.crit[n])) then teach[n] = teach[n] or c end
+    end
+    -- someone else's line may already carry what I was waiting to say: that part is no longer mine to say
+    if self._verTeach then
+        for n, v in pairs(self._verTeach) do
+            local theirs = r.addons[n]
+            if theirs and not lib.VersionGT(v, theirs) then self._verTeach[n] = nil end
+        end
+    end
+    if next(teach) then
+        if not self._verTeach then
+            self._verTeach = teach
+            local w = self.VER_WAIT
+            local wait = w[1] + math.random() * (w[2] - w[1])
+            local function answer()
+                local left = self._verTeach
+                self._verTeach = nil
+                if left and next(left) then self:SendVersions(true) end
+            end
+            if not After(wait, answer) then answer() end
+        else
+            for n, v in pairs(teach) do self._verTeach[n] = self._verTeach[n] or v end
+        end
+    end
+    self:CheckVersions()
+    fire("VERSIONS", sender, r)
+end
+
+--- The only words this lib ever says unasked: below a critical release, or too old to talk to a guildmate's lib.
+--- Once a session each; in a fight they wait for it to end.
+function lib:CheckVersions()
+    local say = {}
+    for n, mine in pairs(self.addons) do
+        local c = self.versCrit[n]
+        if c and lib.VersionGT(c, mine) and not self.versTold[n] then say[#say + 1] = { n, c, mine } end
+    end
+    local compatWho
+    if not self.versTold._compat then
+        for who, r in pairs(self.vers) do if (r.compat or 0) > self.MINOR then compatWho = who end end
+    end
+    if #say == 0 and not compatWho then return false end
+    if InCombatLockdown and InCombatLockdown() then
+        if not self._verHeld then
+            self._verHeld = true
+            local function again() self._verHeld = nil self:CheckVersions() end
+            After(5, again)
+        end
+        return false
+    end
+    local function line(s) if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cffb980ffBiS|r " .. s) end end
+    table.sort(say, function(a, b) return a[1] < b[1] end)
+    for _, s in ipairs(say) do
+        self.versTold[s[1]] = true
+        line(("%s %s is a critical update (you have %s) - update it on CurseForge, then /reload."):format(s[1], s[2], s[3]))
+    end
+    if compatWho then
+        self.versTold._compat = true
+        line(("your BiS addons' shared channel is too old to talk to %s's - update any BiS addon on CurseForge, then /reload.")
+            :format(compatWho))
+    end
+    return true
+end
+
+--- The list: every BiS addon you run or anyone around runs - yours, the newest seen and who has it, the critical
+--- mark, how many run it. Sorted by name.
+function lib:Versions()
+    local names = {}
+    for n in pairs(self.addons) do names[n] = true end
+    for n in pairs(self.versNewest) do names[n] = true end
+    local known = self:CritKnown()
+    local out = {}
+    for n in pairs(names) do
+        local mine, nw = self.addons[n], self.versNewest[n]
+        local newest, who = mine, mine and "you" or nil
+        if nw and (not mine or lib.VersionGT(nw.ver, mine)) then newest, who = nw.ver, nw.who end
+        local runs = mine and 1 or 0
+        for _, r in pairs(self.vers) do if r.addons[n] then runs = runs + 1 end end
+        out[#out + 1] = { addon = n, mine = mine, newest = newest, who = who, critical = known[n], runs = runs }
+    end
+    table.sort(out, function(a, b) return a.addon < b.addon end)
+    return out
+end
+
+function lib:StartVersions()
+    if self._verStarted then return end
+    self._verStarted = true
+    self:RegisterGuildMod("VER")
+    self:RegisterHandler("VER", "HAVE", function(sender, ...) lib:_OnVersions(sender, ...) end)
+    self:RegisterCallback("PEER", function(name, pr) lib:_VersionsFromPeer(name, pr) end)
+    local first = self.VER_FIRST + math.random() * 10
+    local function hello() lib:SendVersions() end
+    if not After(first, hello) then hello() end
+end
+if lib._booted then lib:StartVersions() end
+
+--------------------------------------------------------------------
 -- the one slash: status and the honest off switch
 --------------------------------------------------------------------
 
@@ -2504,6 +2705,17 @@ if SlashCmdList then
             for i = math.max(1, #t - 7), #t do say("  " .. t[i]) end
         elseif msg == "share on" then
             lib:SetSharing(true); say("share on - your guild sees where you are on their map (while you move, outside instances)")
+        elseif msg == "ver" or msg == "versions" then
+            -- minor 18: who runs which BiS addon, from the guild and the group (nothing is fetched - this is what
+            -- the people around you said)
+            local list = lib.Versions and lib:Versions() or {}
+            say(("BiS addons around you (%d):"):format(#list))
+            for _, e in ipairs(list) do
+                local mine = e.mine and ("you " .. e.mine) or "you: not installed"
+                local newest = (e.newest and e.who ~= "you") and ("   newest " .. e.newest .. " (" .. tostring(e.who) .. ")") or ""
+                local crit = e.critical and ("   critical " .. e.critical) or ""
+                say(("  %s   %s%s%s   - %d run it"):format(e.addon, mine, newest, crit, e.runs or 0))
+            end
         else
             say(("comm %s, share %s, lib %d, %d peer(s), running %s")
                 :format(lib:Enabled() and "on" or "off", lib:Sharing() and "on" or "off", lib.MINOR, lib:Count(),
@@ -2528,7 +2740,7 @@ if SlashCmdList then
             say(("sent %d, refused %d, waiting %d%s%s"):format(lib.sentCount or 0, lib.refusedCount or 0,
                 #(lib.outbox or {}), lib._lastError and (", last trouble: " .. lib._lastError) or "",
                 OutgoingBlocked() and " (the realm says restricted - Forever always does; ignored)" or ""))
-            say("/biscomm on | off  -  /biscomm share on | off  -  /biscomm ride (the ride clock's log)")
+            say("/biscomm on | off  -  /biscomm share on | off  -  /biscomm ride (the ride clock's log)  -  /biscomm ver (who runs what)")
         end
     end
 end

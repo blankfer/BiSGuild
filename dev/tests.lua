@@ -95,7 +95,7 @@ fire("ADDON_LOADED", "BiSGuild")
 H.ok(type(_G.BiSGuildDB) == "table" and _G.BiSGuildDB.comm == true, "SavedVariables shaped with defaults on first load")
 
 H.section("embedded libs are canon (drift fences)")
-H.eq(_G.LibBiSComm.MINOR, 17, "LibBiSComm minor 17")
+H.eq(_G.LibBiSComm.MINOR, 18, "LibBiSComm minor 18")
 local function listed(rel) for _, f in ipairs(FILES) do if f == rel then return true end end return false end
 H.ok(listed("Libs/BiSTheme/Console.lua"), "TOC lists the Console embed")
 -- the third-party map libs are BiS Tools' copies byte for byte, so the family carries one version
