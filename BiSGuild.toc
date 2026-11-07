@@ -4,7 +4,7 @@
 ## IconTexture: Interface\Icons\INV_Shirt_GuildTabard_01
 ## Notes: Raid attendance and consumables, measured instead of remembered.
 ## Author: Arn
-## Version: 0.5.4
+## Version: 1.0.0
 ## SavedVariables: BiSGuildDB
 ## OptionalDeps: BiSTheme
 ## DefaultState: enabled
@@ -12,6 +12,8 @@
 ## X-CurseForge-GameVersionType: Burning Crusade
 
 Libs\BiSTheme\Console.lua
+Libs\BiSTheme\Options.lua
+Libs\BiSTheme\Settings.lua
 Libs\LibBiSComm-1.0\LibBiSComm-1.0.lua
 Libs\LibBiSLedger-1.0\LibBiSLedger-1.0.lua
 Libs\LibStub\LibStub.lua
@@ -39,4 +41,5 @@ Core\Recruits.lua
 Core\Logins.lua
 Core\Loot.lua
 API.lua
+Core\Options.lua
 Core\Say.lua

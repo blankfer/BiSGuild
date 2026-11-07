@@ -49,12 +49,21 @@ local FONT_SIZE = {
 H.FONT_SIZE = FONT_SIZE
 
 local function newTexture(owner)
-    local t = { _shown = true, _parent = owner, _isTexture = true }
+    local t = { _shown = true, _parent = owner, _isTexture = true, _alpha = 1 }
+    -- A TEXTURE KEEPS ITS ALPHA, STARTING AT 1 (7 Nov 2026, ported from BiS Memories' kit): the catch-all answered
+    -- SetAlpha with silence and GetAlpha with nil, so "does the options row light up under the mouse" was untestable.
+    function t:SetAlpha(a)
+        if not isnum(a) then error("SetAlpha needs a number", 0) end
+        self._alpha = a
+    end
+    function t:GetAlpha() return self._alpha end
     function t:SetAllPoints() self._all = true end
     -- size and anchor REMEMBERED: a label pinned beside an icon starts where the icon ends, and the
     -- fit check cannot know that if the icon forgot both
     function t:SetPoint(...) keepPoint(self, ...) end
-    function t:ClearAllPoints() self._points = {} end
+    -- the client's ClearAllPoints drops EVERY anchor, the stretch from SetAllPoints too; a SetPoint after a
+    -- SetAllPoints adds an anchor and never undoes the stretch (8 Nov 2026: an 8 px lamp painted its whole row)
+    function t:ClearAllPoints() self._points = {} self._all = nil end
     function t:GetParent() return self._parent end
     function t:SetWidth(w) self._w = w end
     function t:SetHeight(h) self._h = h end
@@ -108,8 +117,10 @@ local function newFontString(owner, template)
     function f:ClearAllPoints() self._points = {} end
     function f:SetWidth(w) self._w = w end
     function f:SetHeight(h) self._h = h end
-    function f:SetJustifyH() end
-    function f:SetWordWrap() end
+    -- justify and word wrap REMEMBERED (8 Nov 2026: the dashboard's words must read left to right)
+    function f:SetJustifyH(j) self._justH = j end
+    function f:SetJustifyV(j) self._justV = j end
+    function f:SetWordWrap(v) self._wrap = v end
     function f:SetAlpha(a) self._alpha = a end
     function f:GetAlpha() return self._alpha end
     function f:GetParent() return self._parent end
@@ -140,7 +151,6 @@ local function newFontString(owner, template)
         self._fontObject = o; self._font = self._font or "Fonts\\FRIZQT__.TTF"
         if FONT_SIZE[o] then self._size = FONT_SIZE[o] end
     end
-    function f:SetWordWrap() end
     function f:Show() self._shown = true end
     function f:Hide() self._shown = false end
     function f:IsShown() return self._shown end
@@ -157,7 +167,7 @@ local function newFrame(ftype, name, parent, template)
     local fr = {
         _type = ftype, _name = name, _parent = parent, _template = template,
         _scripts = {}, _events = {}, _shown = true,
-        _w = 200, _h = 24, _text = "", _enabled = true,
+        _text = "", _enabled = true,
     }
     H.frames[#H.frames + 1] = fr
 
@@ -166,8 +176,10 @@ local function newFrame(ftype, name, parent, template)
     function fr:SetSize(w, h) self._w, self._h = w, h end
     function fr:SetWidth(w) self._w = w end
     function fr:SetHeight(h) self._h = h end
-    function fr:GetWidth() return self._w end
-    function fr:GetHeight() return self._h end
+    -- AN UNSIZED FRAME IS 0 x 0, as on the client (8 Nov 2026, the BiS> dashboard): the mock answered 200 x 24
+    -- for a frame nobody sized, so "the panel has room for every row" was measured on a size that is never there
+    function fr:GetWidth() return self._w or 0 end
+    function fr:GetHeight() return self._h or 0 end
     -- Enough anchor maths to catch a window that WALKS. These used to be flat
     -- constants, so `Relayout` could drop the frame by its own height on every
     -- call and no test could ever see it. A frame anchored to UIParent's
@@ -192,6 +204,12 @@ local function newFrame(ftype, name, parent, template)
         return 100
     end
     function fr:GetEffectiveScale() return 1 end
+    -- A FRAME REMEMBERS ITS SCALE AND ITS PARENT (8 Nov 2026). Both were auto no-ops answering nil, so
+    -- "the BiS> page leaves the options window's size and home alone" compared nil with nil. The client
+    -- answers 1 for a frame never scaled, and SetParent really moves it.
+    function fr:SetScale(s) self._scale = s end
+    function fr:GetScale() return self._scale or 1 end
+    function fr:SetParent(p) self._parent = p end
     function fr:GetCenter() return 100, 100 end
     function fr:SetPoint(point, a, b, c, d)
         self._points = self._points or {}
@@ -207,8 +225,11 @@ local function newFrame(ftype, name, parent, template)
             if p.point == point then return p.x, p.y end
         end
     end
-    function fr:ClearAllPoints() self._points = {} end
-    function fr:SetAllPoints() end
+    -- SetAllPoints REMEMBERED and undone by ClearAllPoints, as on the client (8 Nov 2026)
+    function fr:ClearAllPoints() self._points = {} self._all = nil end
+    function fr:SetAllPoints() self._all = true end
+    -- which buttons a Button answers (8 Nov 2026): the client sends only left-clicks until told otherwise
+    function fr:RegisterForClicks(...) self._clicks = { ... } end
     function fr:GetPoint() return "CENTER", nil, "CENTER", 0, 0 end
     function fr:GetNumPoints() return 1 end
     function fr:Show() self._shown = true end

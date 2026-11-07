@@ -43,7 +43,24 @@ Read ../_bisdev/CLAUDE.md first.
 - `Core/Say.lua`: the slash commands. Bare `/bisg` opens the window; `report`, `logs <path>` and
   `script` are the rest, and anything unrecognised is the report, because there is nothing else it
   could mean now.
-- `Libs/`: embedded `BiSTheme/Console.lua` and `LibBiSComm-1.0` — copies, see `../_bisdev/CLAUDE.md`.
+- **Forever 1.0 (7 Nov 2026), quiet start**: `ns.Settle()` (Core/Init.lua, at ADDON_LOADED, before the defaults)
+  says new or existing - no table, or only the one our own `db()` made (`ns.madeHere`), is NEW. `ns.Forever10`
+  writes `ns.QUIET` (logins, mapDots, versionNote = false) into a new install, or FREEZES an existing save
+  (logins/mapDots were read `~= false`: written as what they showed; versionNote = true), then stamps `forever10`.
+  Never twice. No per-character mirror here, so a lost save reads as new (quiet).
+- `Core/Options.lua` (`ns.Opt`): the options window (BiSTheme's kit, `BiSGuildOptions`) and the BiS> Guild page
+  (`O.Register` at PLAYER_LOGIN, `status()` = "logins - dots - note"). Every switch and its slash command share one
+  setter (`O.SetLogins/SetDots/SetNote/SetComm/SetShare`). `/bisg options` opens the options WINDOW (8 Nov, like the family's right-click); the page is Esc > Options > AddOns.
+  The page never takes the options window in (Arn: "dont just shrink remake them all"). **Since 8 Nov it is the
+  kit's dashboard** (`T.Dashboard`, Settings minor 3 - the family rule): `build`/`refresh`, no `window`. Its sections
+  (`O.Entries`, made from the window's own `O.Rows()` - a section's switch IS its row's get/set): the terminal (no
+  switch, "open the terminal", `/bisg`), login pop-up, map dots, the BiS channel (share my spot as its row), version
+  note. `O.Model().onChange` repaints the options window when it is open. **No minimap button** - never had one, so no
+  right-click to fix; `/bisg` and the BiS> page are the doors.
+- The terminal's right-click player menu (`K.PlayerMenu`) opens only where `IsInInstance()` reads a plain false
+  (`K.OutInTheWorld`): inside an instance the game's menu breaks on secret frame rects.
+- `Libs/`: embedded `BiSTheme/Console.lua`, `Options.lua` (since 1.0.0), `Settings.lua` and `LibBiSComm-1.0` —
+  copies, see `../_bisdev/CLAUDE.md`.
   Since 16 Oct also three THIRD-PARTY libs, BiS Tools' copies byte for byte (the suite checks):
   `LibStub`, `CallbackHandler-1.0`, `HereBeDragons` (BSD) - sources and commits in
   `Libs/THIRD-PARTY.txt`. Never edit them. The suites compile HereBeDragons but never run it (it drives

@@ -557,10 +557,30 @@ end
 --- FRIEND menu, not the guild roster's: a guild menu opened by an addon can taint promote and kick
 --- (BiS Tools keeps its guild-menu line behind a switch for that reason). Forever's whole name, from
 --- the roster, so whisper and invite reach the right person.
+---
+--- NOT INSIDE AN INSTANCE (7 Nov 2026 sweep): opened from an addon's code there, the game's menu measures
+--- frames whose rects are secret (FrameUtil) and breaks - the game's own menus with it. So it opens only
+--- where IsInInstance() reads a PLAIN false; true, a secret answer or a failed call is one line instead.
+local function OutInTheWorld()
+    if not IsInInstance then return true end
+    local ok, inside = pcall(IsInInstance)
+    if not ok then return false end
+    if issecretvalue then
+        local okS, secret = pcall(issecretvalue, inside)
+        if not okS or secret then return false end
+    end
+    return inside == false
+end
+K.OutInTheWorld = OutInTheWorld
+
 function K.PlayerMenu(name)
     local m = K.Member(name)
     local whole = m and m.name or name
     if type(whole) ~= "string" or whole == "" then return false end
+    if not OutInTheWorld() then
+        ns.Print("the player menu waits until you are out of the instance - opened in there it breaks the game's menus.")
+        return false
+    end
     if UnitPopup_OpenMenu then
         local ok = pcall(UnitPopup_OpenMenu, "FRIEND",
             { name = whole, chatTarget = whole, connected = m and m.online or nil })
