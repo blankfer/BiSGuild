@@ -199,6 +199,12 @@ local function newFrame(ftype, name, parent, template)
         return 100
     end
     function fr:GetEffectiveScale() return 1 end
+    -- A FRAME REMEMBERS ITS SCALE AND ITS PARENT (8 Nov 2026). Both were auto no-ops answering nil, so
+    -- "the BiS> page leaves the options window's size and home alone" compared nil with nil. The client
+    -- answers 1 for a frame never scaled, and SetParent really moves it.
+    function fr:SetScale(s) self._scale = s end
+    function fr:GetScale() return self._scale or 1 end
+    function fr:SetParent(p) self._parent = p end
     function fr:GetCenter() return 100, 100 end
     function fr:SetPoint(point, a, b, c, d)
         self._points = self._points or {}

@@ -18,8 +18,9 @@
         title  = "Healing",                          -- shown as "BiS> Healing"
         about  = "Click-to-heal raid frames ...",    -- one or two plain lines
         status = function() return "frames on  -  target off" end,  -- what is on, in a few words (front page)
-        window = function() return optionsFrame end, -- an options window to show INSIDE the page (BiSTheme.Options)
-        build  = function(frame) ... end,            -- or: draw the page yourself (an addon without Options.lua)
+        window = function() return optionsFrame end, -- its own options window: a button on the page opens it
+        build  = function(body) ... end,             -- the DASHBOARD: draw the whole page, once (T.Dash* below)
+        refresh = function(body) ... end,            -- every time the page shows: paint what is true now
         open   = { label = "mouse binds", func = function() ... end },   -- optional big button: the main window
         api    = { name = "BiSHealingAPI", about = "read the grid's ... " },  -- for other addon authors
       })
@@ -29,13 +30,20 @@
   RegisterAddOnCategory / OpenToCategory - present on Forever; Ace3, Gargul and others use the same calls
   there). Without it (an older client) every call here answers nil and the addon's own window still works.
 
+  MINOR 2 (Arn, 7 Nov, the first live look: "the windows are using like 30% of the available space ... we
+  esentially just took the old option window kept it the same size and nestels it inside a bigger window" and
+  "dont just shrink remake them all shrinking just makes them harder to read"). A page never takes the options
+  window in any more: the old window stays the old window (the minimap's right-click, as before), and the page is
+  a DASHBOARD the addon draws with the kit below - big switches, readable rows, a help strip - using the whole
+  page. An addon that has not drawn one yet gets a plain page: what it is, what is on, a button to its window.
+
   SELF-GUARDED like the other kit files: newest SETTINGS_MINOR wins, and the pages registered by an older copy
   are kept (they live on the shared BiSTheme table). Canon here; _bisdev/sync.ps1 copies it out.
 ]]
 BiSTheme = BiSTheme or {}
 local T = BiSTheme
-if (T.SETTINGS_MINOR or 0) >= 1 then return end
-T.SETTINGS_MINOR = 1
+if (T.SETTINGS_MINOR or 0) >= 2 then return end
+T.SETTINGS_MINOR = 2
 
 -- palette fallback: only when this file is embedded and no other BiSTheme file ran (as the others do)
 if not T.rgb then
@@ -301,57 +309,270 @@ function T.ShowSettingsPage(addon)
   elseif f.openBtn then
     f.openBtn:Hide()
   end
-  -- the addon's own options window, held in the page while it shows: no scale, no drag, no close of its own
-  if spec.window then
-    local okW, win = pcall(spec.window)
-    if okW and type(win) == "table" and win.SetParent then
-      page.held = page.held or {}
-      local h = page.held
-      if h.win ~= win then
-        h.win = win
-        h.parent = win.GetParent and win:GetParent() or UIParent
-        h.scale = win.GetScale and win:GetScale() or 1
-        h.strata = win.GetFrameStrata and win:GetFrameStrata() or "MEDIUM"
-        h.points = {}
-        if win.GetNumPoints then
-          for n = 1, win:GetNumPoints() do h.points[n] = { win:GetPoint(n) } end
-        end
-      end
-      win:SetParent(f.body)
-      if win.SetScale then win:SetScale(1) end
-      if win.SetFrameStrata then win:SetFrameStrata(f.GetFrameStrata and f:GetFrameStrata() or "HIGH") end
-      win:ClearAllPoints()
-      win:SetPoint("TOPLEFT", f.body, "TOPLEFT", 0, 0)
-      -- A WIDE WINDOW FITS THE PAGE (BiS Tools' options are several columns): shrunk to the page's width, never grown
-      local bw = f.body.GetWidth and f.body:GetWidth() or 0
-      local ww = win.GetWidth and win:GetWidth() or 0
-      if win.SetScale and type(bw) == "number" and type(ww) == "number" and bw > 0 and ww > bw then win:SetScale(bw / ww) end
-      win:Show()
-      page.inside = true
+  if spec.build then
+    -- THE DASHBOARD: the addon draws the whole body once, then paints it every time the page shows
+    if f.optBtn then f.optBtn:Hide() end
+    if f.state then f.state:Hide() end
+    if not f.built then
+      f.built = true
+      local okB, why = pcall(spec.build, f.body)
+      -- a broken dashboard reaches BugSack (the game's error handler), never the page's other addons
+      if not okB and geterrorhandler then pcall(geterrorhandler(), addon .. " dashboard: " .. tostring(why)) end
     end
-  elseif spec.build and not f.built then
-    f.built = true
-    pcall(spec.build, f.body)
+    if spec.refresh then pcall(spec.refresh, f.body) end
+    return
+  end
+  -- NOT DRAWN YET: what is on, and a big button to the addon's own options window - which stays exactly as it is
+  if not f.state then
+    f.state = fs(f.body, P.HEAD, "ink", "")
+    f.state:SetPoint("TOPLEFT", f.body, "TOPLEFT", 0, 0)
+    f.state:SetPoint("RIGHT", f.body, "RIGHT", 0, 0)
+  end
+  local okS, s = pcall(function() return spec.status and spec.status() end)
+  f.state:SetText(okS and type(s) == "string" and s or "")
+  f.state:Show()
+  if spec.window then
+    if not f.optBtn then
+      f.optBtn = button(f.body, "the options window", 200, function()
+        T.CloseSettingsPanel()
+        local okW, win = pcall(page.spec.window)
+        if okW and type(win) == "table" and win.Show then
+          if win.Raise then pcall(win.Raise, win) end
+          win:Show()
+        end
+      end)
+      f.optBtn:SetHeight(30)
+      f.optBtn:SetPoint("TOPLEFT", f.state, "BOTTOMLEFT", 0, -14)
+    end
+    f.optBtn:Show()
+  elseif f.optBtn then
+    f.optBtn:Hide()
   end
 end
 
---- Leaving the page gives the options window back to the screen, as it was, hidden.
+--- Leaving the page: nothing to give back (minor 2 holds no window). Kept so a page's OnHide still has a target.
 function T.HideSettingsPage(addon)
   local page = T.settingsPages[addon]
-  local h = page and page.held
-  if not (h and h.win and page.inside) then return end
-  local win = h.win
-  page.inside = nil
-  win:Hide()
-  win:SetParent(h.parent or UIParent)
-  if win.SetScale then win:SetScale(h.scale or 1) end
-  if win.SetFrameStrata then win:SetFrameStrata(h.strata or "MEDIUM") end
-  win:ClearAllPoints()
-  if #h.points > 0 then
-    for _, p in ipairs(h.points) do win:SetPoint(unpack(p)) end
-  else
-    win:SetPoint("CENTER")
+  if page and page.spec and page.spec.hide then pcall(page.spec.hide, page.frame and page.frame.body) end
+end
+
+--------------------------------------------------------------------
+-- THE DASHBOARD KIT (minor 2): what an addon draws its page with
+--------------------------------------------------------------------
+-- The cockpit look (Arn: "a $1 billion jet fighter ... so simple and very functional", the Turbo Vision / Mac
+-- Platinum depth he liked): dark insets, RAISED buttons (a light top edge, a dark bottom edge), big words, ON in
+-- green and OFF in grey, and nothing on the page that does not do something. The same four kinds as Options.lua -
+-- toggle, seg, step, button - read from the same option tables, so an addon's settings need no second copy.
+-- Every row and every button POPS under the mouse (the family rule), and the row's help shows in the help strip.
+
+T.SETTINGS.DASH = { ROW = 32, LABEL = 13, SW_W = 66, SW_H = 24, SEG_W = 70, STEP_W = 28, VAL_W = 76, BTN_W = 140,
+                    HEAD = 30, HELP = 40 }
+
+local function raised(b)
+  b.bg = tex(b, "BACKGROUND", "surface", 1)
+  b.bg:SetAllPoints()
+  b.top = tex(b, "BORDER", "line2", 1)
+  b.top:SetPoint("TOPLEFT") b.top:SetPoint("TOPRIGHT") b.top:SetHeight(1)
+  b.bot = tex(b, "BORDER", "bg", 1)
+  b.bot:SetPoint("BOTTOMLEFT") b.bot:SetPoint("BOTTOMRIGHT") b.bot:SetHeight(2)
+  b.wash = tex(b, "ARTWORK", "accent", 0.35)
+  b.wash:SetAllPoints()
+  b.wash:SetAlpha(0)
+end
+
+local function hover(b, row)
+  b:SetScript("OnEnter", function(s) s.wash:SetAlpha(1) if row and row.Pop then row:Pop(true) end end)
+  b:SetScript("OnLeave", function(s) s.wash:SetAlpha(0) if row and row.Pop then row:Pop(false) end end)
+end
+
+--- A big raised button. `row` (optional): the dashboard row it sits on, kept lit while the mouse is on the button.
+function T.DashButton(parent, label, w, onclick, row)
+  local D = T.SETTINGS.DASH
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(w or D.BTN_W, D.SW_H)
+  raised(b)
+  b.label = fs(b, D.LABEL, "ink", label)
+  b.label:SetPoint("CENTER", 0, 0)
+  if b.label.SetJustifyH then b.label:SetJustifyH("CENTER") end
+  hover(b, row)
+  b:SetScript("OnClick", function(s) if onclick then onclick(s) end end)
+  return b
+end
+
+--- The ON / OFF switch: a lamp and a word, green when on. b:Set(on).
+function T.DashSwitch(parent, onclick, row)
+  local D = T.SETTINGS.DASH
+  local b = T.DashButton(parent, "OFF", D.SW_W, onclick, row)
+  b.fill = tex(b, "BORDER", "good", 0.22)
+  b.fill:SetAllPoints()
+  b.lamp = tex(b, "OVERLAY", "line2", 1)
+  b.lamp:SetSize(8, 8)
+  b.lamp:SetPoint("LEFT", 8, 0)
+  b.label:ClearAllPoints()
+  b.label:SetPoint("CENTER", 6, 0)
+  function b:Set(on)
+    self.on = on and true or false
+    self.label:SetText(self.on and "ON" or "OFF")
+    self.label:SetTextColor(T.rgb(self.on and "good" or "muted"))
+    self.lamp:SetColorTexture(T.rgb(self.on and "good" or "line2"))
+    self.fill:SetAlpha(self.on and 1 or 0)
   end
+  b:Set(false)
+  return b
+end
+
+--- A panel: a dark box with a gold title. Children anchor inside it below p.HEAD.
+function T.DashPanel(parent, title)
+  local D = T.SETTINGS.DASH
+  local p = CreateFrame("Frame", nil, parent)
+  p.bg = tex(p, "BACKGROUND", "bg", 0.92)
+  p.bg:SetAllPoints()
+  p.edges = {}
+  for i, pts in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" }, { "TOPLEFT", "BOTTOMLEFT" },
+                         { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+    local e = tex(p, "BORDER", "line", 1)
+    e:SetPoint(pts[1]) e:SetPoint(pts[2])
+    if i <= 2 then e:SetHeight(1) else e:SetWidth(1) end
+    p.edges[i] = e
+  end
+  p.head = fs(p, T.SETTINGS.HEAD, "gold", title or "")
+  p.head:SetPoint("TOPLEFT", 12, -9)
+  p.HEAD = D.HEAD
+  return p
+end
+
+--- The help strip: one line of words for whatever is under the mouse. h:Say(text), h:Idle().
+function T.DashHelp(parent, idle)
+  local D = T.SETTINGS.DASH
+  local h = CreateFrame("Frame", nil, parent)
+  h:SetHeight(D.HELP)
+  h.bg = tex(h, "BACKGROUND", "sunken", 1)
+  h.bg:SetAllPoints()
+  h.bar = tex(h, "BORDER", "accent", 1)
+  h.bar:SetPoint("TOPLEFT") h.bar:SetPoint("BOTTOMLEFT") h.bar:SetWidth(3)
+  h.text = fs(h, T.SETTINGS.BODY + 1, "ink2", "")
+  h.text:SetPoint("TOPLEFT", 12, -6)
+  h.text:SetPoint("BOTTOMRIGHT", -10, 6)
+  if h.text.SetJustifyV then h.text:SetJustifyV("MIDDLE") end
+  h.idle = idle or "Point at anything on this page to read what it does."
+  function h:Say(text) self.text:SetText(text and text ~= "" and text or self.idle) end
+  function h:Idle() self.text:SetText(self.idle) end
+  h:Idle()
+  return h
+end
+
+local DASH = {}
+
+function DASH.toggle(row, opt, db)
+  row.sw = T.DashSwitch(row, function() row:Change(not opt.get(db)) end, row)
+  row.sw:SetPoint("RIGHT", -8, 0)
+  row.ctlW = T.SETTINGS.DASH.SW_W
+  row.paint = function() row.sw:Set(opt.get(db)) end
+end
+
+function DASH.seg(row, opt, db)
+  local D = T.SETTINGS.DASH
+  row.segs = {}
+  local n = #opt.values
+  for i, v in ipairs(opt.values) do
+    local s = T.DashButton(row, tostring(v), D.SEG_W, function() row:Change(v) end, row)
+    s:SetPoint("RIGHT", -8 - (n - i) * (D.SEG_W + 3), 0)
+    s.fill = tex(s, "BORDER", "accent", 0.85)
+    s.fill:SetAllPoints()
+    s.value = v
+    row.segs[i] = s
+  end
+  row.ctlW = n * (D.SEG_W + 3)
+  row.paint = function()
+    local cur = opt.get(db)
+    for _, s in ipairs(row.segs) do
+      s.on = s.value == cur
+      s.fill:SetAlpha(s.on and 1 or 0)
+      s.label:SetTextColor(T.rgb(s.on and "bg" or "ink2"))
+    end
+  end
+end
+
+function DASH.step(row, opt, db)
+  local D = T.SETTINGS.DASH
+  local function bump(dir)
+    local v = tonumber(opt.get(db)) or opt.min
+    v = v + dir * (opt.step or 1)
+    if opt.min and v < opt.min then v = opt.min elseif opt.max and v > opt.max then v = opt.max end   -- the stepper clamps
+    row:Change(v)
+  end
+  row.plus = T.DashButton(row, "+", D.STEP_W, function() bump(1) end, row)
+  row.plus:SetPoint("RIGHT", -8, 0)
+  row.val = fs(row, D.LABEL, "ink", "")
+  row.val:SetWidth(D.VAL_W)
+  if row.val.SetJustifyH then row.val:SetJustifyH("CENTER") end
+  row.val:SetPoint("RIGHT", row.plus, "LEFT", -4, 0)
+  row.minus = T.DashButton(row, "-", D.STEP_W, function() bump(-1) end, row)
+  row.minus:SetPoint("RIGHT", row.val, "LEFT", -4, 0)
+  row.ctlW = 2 * D.STEP_W + D.VAL_W + 8
+  row.paint = function()
+    local okV, s = pcall(function() return opt.show and opt.show(db) or opt.get(db) end)
+    row.val:SetText(okV and tostring(s) or "?")
+  end
+end
+
+function DASH.button(row, opt, db)
+  local D = T.SETTINGS.DASH
+  row.btn = T.DashButton(row, tostring(opt.button or "go"), D.BTN_W, function()
+    if opt.action then opt.action(db) end
+    if row.ctx and row.ctx.onChange then row.ctx.onChange(opt) end
+  end, row)
+  row.btn:SetPoint("RIGHT", -8, 0)
+  row.ctlW = D.BTN_W
+  row.paint = function() end
+end
+
+T.DashKinds = DASH
+
+--- One setting as a big row: its words on the left, its control on the right. `opt` is the same table Options.lua
+--- takes ({ kind, label, help, get, set, values | min, max, step, show | button, action }); ctx = { help = a help
+--- strip, onChange = function(opt) }. row:Paint() reads the setting again; row:SetDim(true) greys it (tool off).
+function T.DashControl(parent, opt, db, ctx)
+  local D = T.SETTINGS.DASH
+  local make = DASH[opt and opt.kind]
+  if not make then error("BiSTheme: a dashboard has no '" .. tostring(opt and opt.kind) .. "' control", 2) end
+  local row = CreateFrame("Frame", nil, parent)
+  row:SetHeight(D.ROW)
+  if row.EnableMouse then row:EnableMouse(true) end
+  row.opt, row.ctx = opt, ctx or {}
+  row.bg = tex(row, "BACKGROUND", "sunken", 0.7)
+  row.bg:SetAllPoints()
+  row.wash = tex(row, "BORDER", "accent", 0.18)
+  row.wash:SetAllPoints()
+  row.wash:SetAlpha(0)
+  row.bar = tex(row, "ARTWORK", "accent", 1)
+  row.bar:SetPoint("TOPLEFT") row.bar:SetPoint("BOTTOMLEFT") row.bar:SetWidth(3)
+  row.bar:SetAlpha(0)
+  row.label = fs(row, D.LABEL, "ink", tostring(opt.label or ""))
+  row.label:SetPoint("LEFT", 12, 0)
+  if row.label.SetWordWrap then row.label:SetWordWrap(false) end
+  function row:Pop(on)
+    self.wash:SetAlpha(on and 1 or 0)
+    self.bar:SetAlpha(on and 1 or 0)
+    local h = self.ctx.help
+    if h then if on then h:Say(self.opt.help or self.opt.label) else h:Idle() end end
+  end
+  function row:Change(v)
+    self.opt.set(db, v)
+    self:Paint()
+    if self.ctx.onChange then self.ctx.onChange(self.opt) end
+  end
+  function row:Paint() if self.paint then self.paint() end end
+  function row:SetDim(off)
+    self.dim = off and true or false
+    self.label:SetAlpha(off and 0.45 or 1)
+  end
+  row:SetScript("OnEnter", function(s) s:Pop(true) end)
+  row:SetScript("OnLeave", function(s) s:Pop(false) end)
+  make(row, opt, db)
+  row.label:SetPoint("RIGHT", row, "RIGHT", -((row.ctlW or 0) + 20), 0)
+  row:Paint()
+  return row
 end
 
 --- Put the game's options panel away (before a page's button opens the addon's own window over the screen).

@@ -3414,11 +3414,21 @@ do
     spec.open.func()
     H.ok(NS.K.frame:IsShown(), "which opens it")
     NS.K.Hide()
-    H.eq(spec.window(), f, "the page holds this options window")
+    H.eq(spec.window(), f, "the page's window is this options window")
+    -- minor 2 (Arn 7 Nov: "dont just shrink remake them all"): the page never takes the window in
+    f:Hide()
+    local parentBefore, scaleBefore = f:GetParent(), f:GetScale()
     T.ShowSettingsPage("BiSGuild")
-    H.ok(page.inside and f:IsShown(), "shown inside the page")
+    H.ok(f:GetParent() == parentBefore and f:GetScale() == scaleBefore and not f:IsShown(),
+         "showing the page leaves the options window alone: same parent, same scale, still hidden")
+    local optBtn = page.frame.optBtn
+    H.ok(optBtn and optBtn:IsShown(), "the page has a button to the options window")
+    optBtn:Click()
+    H.ok(f:IsShown() and f:GetParent() == parentBefore and f:GetScale() == scaleBefore,
+         "which shows the window as it always was")
+    f:Hide()
     T.HideSettingsPage("BiSGuild")
-    H.ok(not page.inside and not f:IsShown(), "and handed back, hidden, when the page closes")
+    H.ok(not f:IsShown() and f:GetParent() == parentBefore, "leaving the page gives nothing back - nothing was taken")
     _G.SlashCmdList.BISGUILD("options")
     H.eq(opened[#opened], "BiS> Guild", "/bisg options opens the BiS> page")
     H.ok(T.OpenSettings("BiSGuild") and opened[#opened] == "BiS> Guild", "(the family's OpenSettings reaches it too)")

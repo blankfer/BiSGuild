@@ -51,7 +51,10 @@ Read ../_bisdev/CLAUDE.md first.
 - `Core/Options.lua` (`ns.Opt`): the options window (BiSTheme's kit, `BiSGuildOptions`) and the BiS> Guild page
   (`O.Register` at PLAYER_LOGIN, `status()` = "logins - dots - note"). Every switch and its slash command share one
   setter (`O.SetLogins/SetDots/SetNote/SetComm/SetShare`). `/bisg options` opens the page, else the window.
-  **No minimap button** - never had one; `/bisg` and the BiS> page are the doors.
+  Since Settings minor 2 (8 Nov) the page never takes the options window in (Arn: "dont just shrink remake them
+  all"): it shows the status line and a button "the options window", which closes the game's options and shows the
+  window as it always was. A dashboard (`build`) comes later. **No minimap button** - never had one, so no
+  right-click to fix; `/bisg` and the BiS> page are the doors.
 - The terminal's right-click player menu (`K.PlayerMenu`) opens only where `IsInInstance()` reads a plain false
   (`K.OutInTheWorld`): inside an instance the game's menu breaks on secret frame rects.
 - `Libs/`: embedded `BiSTheme/Console.lua`, `Options.lua` (since 1.0.0), `Settings.lua` and `LibBiSComm-1.0` —
