@@ -320,6 +320,8 @@ function L.Build()
         if l and t and h then ns.DB().loginsPos = { math.floor(l + 0.5), math.floor(t - h + 0.5) } end
     end)
     f:Hide()
+    -- Escape closes it, as every BiS window (6 Nov: the family audit found it had none) - combat-safe, Init.lua's way
+    ns.EscKeys(f, function() f:Hide() end)
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
     ui.Fill(bg, "bg", 0.96)
