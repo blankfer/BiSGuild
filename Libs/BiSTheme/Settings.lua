@@ -291,7 +291,9 @@ function T.ShowSettingsPage(addon)
   f.ver:SetText(version(addon) or "")
   f.about:SetText(spec.about or "")
   if spec.open and spec.open.func then
-    if not f.openBtn then f.openBtn = button(f, "", 160, function() pcall(page.spec.open.func) end) end
+    -- the game's options panel closes first, so the window it opens is not left behind it (Nebbinator's helper,
+    -- 7 Nov: "the desk button opens the window; it may sit behind the game's options panel")
+    if not f.openBtn then f.openBtn = button(f, "", 160, function() T.CloseSettingsPanel() pcall(page.spec.open.func) end) end
     f.openBtn.label:SetText(tostring(spec.open.label or "open"))
     f.openBtn:ClearAllPoints()
     f.openBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -P.PAD, -P.PAD)
@@ -320,6 +322,10 @@ function T.ShowSettingsPage(addon)
       if win.SetFrameStrata then win:SetFrameStrata(f.GetFrameStrata and f:GetFrameStrata() or "HIGH") end
       win:ClearAllPoints()
       win:SetPoint("TOPLEFT", f.body, "TOPLEFT", 0, 0)
+      -- A WIDE WINDOW FITS THE PAGE (BiS Tools' options are several columns): shrunk to the page's width, never grown
+      local bw = f.body.GetWidth and f.body:GetWidth() or 0
+      local ww = win.GetWidth and win:GetWidth() or 0
+      if win.SetScale and type(bw) == "number" and type(ww) == "number" and bw > 0 and ww > bw then win:SetScale(bw / ww) end
       win:Show()
       page.inside = true
     end
@@ -346,6 +352,16 @@ function T.HideSettingsPage(addon)
   else
     win:SetPoint("CENTER")
   end
+end
+
+--- Put the game's options panel away (before a page's button opens the addon's own window over the screen).
+function T.CloseSettingsPanel()
+  local sp = rawget(_G, "SettingsPanel")
+  if not (sp and sp.IsShown) then return false end
+  local okS, shown = pcall(sp.IsShown, sp)
+  if not (okS and shown) then return false end
+  if HideUIPanel then return pcall(HideUIPanel, sp) and true or false end
+  return pcall(sp.Hide, sp) and true or false
 end
 
 --- Open the game's options on an addon's page (the minimap's right-click), or on "BiS>" itself. True when it did.
