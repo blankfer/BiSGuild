@@ -111,6 +111,17 @@ do
     local canon = bytes((os.getenv("BISTHEME") or (ROOT .. "/../BiSTheme")) .. "/Console.lua")
     if canon then H.ok(bytes(ROOT .. "/Libs/BiSTheme/Console.lua") == canon, "Console.lua byte-identical to canon")
     else H.say("  (note) no canon BiSTheme beside the checkout - bytes fence skipped") end
+    -- the options window's kit (Forever 1.0) and the one BiS> home: canon bytes too, Options right after Console
+    local at = {}
+    for i, f in ipairs(FILES) do at[f] = i end
+    H.ok(at["Libs/BiSTheme/Options.lua"] and at["Libs/BiSTheme/Options.lua"] == at["Libs/BiSTheme/Console.lua"] + 1,
+         "TOC lists the Options embed, right after Console")
+    H.ok(listed("Libs/BiSTheme/Settings.lua"), "TOC lists the Settings embed")
+    for _, name in ipairs({ "Options.lua", "Settings.lua" }) do
+        local c = bytes((os.getenv("BISTHEME") or (ROOT .. "/../BiSTheme")) .. "/" .. name)
+        if c then H.ok(bytes(ROOT .. "/Libs/BiSTheme/" .. name) == c, name .. " byte-identical to canon")
+        else H.say("  (note) no canon BiSTheme beside the checkout - " .. name .. " fence skipped") end
+    end
     local lib = bytes((os.getenv("BISDEV") or (ROOT .. "/../_bisdev")) .. "/LibBiSComm-1.0/LibBiSComm-1.0.lua")
     if lib then H.ok(bytes(ROOT .. "/Libs/LibBiSComm-1.0/LibBiSComm-1.0.lua") == lib, "LibBiSComm byte-identical to _bisdev")
     else H.say("  (note) no _bisdev beside the checkout - lib bytes fence skipped") end
@@ -134,6 +145,60 @@ H.eq(_G.BiSGuildDB.comm, false, "off is saved")
 lib:SetEnabled(true)
 fire("PLAYER_LOGOUT")
 H.eq(_G.BiSGuildDB.comm, true, "on is saved")
+
+--=============================================================================
+-- FOREVER 1.0: A NEW INSTALL STARTS QUIET, AN EXISTING ONE KEEPS WHAT IT HAD (Arn, 7 Nov: "every new user ...
+-- every module turned off ... BUT all the main functionalities start on" and "everybody that already has the
+-- addons installed, I don't wanna change default settings that they have on"). The terminal and the record are
+-- the core and have no switch. The extras were read as `x ~= false` - nil meant ON - so an existing save must be
+-- FROZEN at what it showed before the stamp is written, or flipping the default would silently switch it off.
+--=============================================================================
+H.section("Forever 1.0: quiet for a new install, frozen for an existing one")
+do
+    local keep = _G.BiSGuildDB
+    local L, M, C = NS.Login, NS.Pins, NS.Copy
+    -- (a) the suite's own first load above was a fresh install: no saved table before ADDON_LOADED
+    H.ok(keep.forever10 == true, "the first load stamped the save")
+    H.ok(keep.logins == false and keep.mapDots == false and keep.versionNote == false,
+         "a NEW install: login pop-up, map dots and the newer-version note all start OFF")
+    H.ok(not L.On() and not M.On(), "and the modules read them as off")
+    H.ok(keep.comm == true, "the shared channel stays on (it is how the record is shared - core)")
+
+    -- a table made by our own db() BEFORE the client handed the saved variables in is still a new install
+    -- (the client keeps the global we made when there is no saved file)
+    _G.BiSGuildDB = nil
+    NS.DB()
+    NS.Settle()
+    H.ok(_G.BiSGuildDB.forever10 and _G.BiSGuildDB.logins == false, "our own early table is not mistaken for a save")
+
+    -- (b) an EXISTING save from 0.5.x: the extras never written (nil = on), a few things set
+    _G.BiSGuildDB = { comm = true, logs = "C:\\WoW\\Logs", guilds = { ["R|G"] = { roster = "x" } } }
+    NS.Settle()
+    local d = _G.BiSGuildDB
+    H.ok(d.forever10 == true, "an existing save is stamped")
+    H.ok(d.logins == true and d.mapDots == true and d.versionNote == true,
+         "and FROZEN: every nil-read extra written as the on it was showing", tostring(d.logins) .. tostring(d.mapDots))
+    H.ok(L.On() and M.On(), "so the login pop-up and the map dots are still on for them")
+    H.eq(d.logs, "C:\\WoW\\Logs", "nothing else touched")
+
+    -- an existing save that had switched one OFF keeps it off
+    _G.BiSGuildDB = { comm = false, logins = false }
+    NS.Settle()
+    H.ok(_G.BiSGuildDB.logins == false and _G.BiSGuildDB.mapDots == true and _G.BiSGuildDB.comm == false,
+         "an existing 'off' stays off; the others freeze on")
+
+    -- (c) the second load changes nothing, in either direction
+    _G.BiSGuildDB.mapDots = false            -- the player switches dots off after the 1.0 load
+    _G.BiSGuildDB.logins = nil               -- and something leaves a key unwritten
+    NS.Settle()
+    H.ok(_G.BiSGuildDB.mapDots == false and _G.BiSGuildDB.logins == nil, "a second load never runs the freeze again")
+    local fresh = { forever10 = true, logins = false, mapDots = false, versionNote = false }
+    _G.BiSGuildDB = fresh
+    _G.BiSGuildDB.versionNote = true         -- a new player switched the note on
+    NS.Settle()
+    H.ok(_G.BiSGuildDB.versionNote == true and _G.BiSGuildDB.logins == false, "nor the quiet start")
+    _G.BiSGuildDB = keep
+end
 
 --=============================================================================
 --=============================================================================
@@ -2091,6 +2156,32 @@ do
     H.eq(K.page, "raiders", "and the right-click does not open the card")
     kioRow:Click("LeftButton")
     H.eq(K.key, "Kio", "a left-click still does")
+
+    -- INSIDE AN INSTANCE THE GAME'S MENU BREAKS (7 Nov sweep): opened from our code it measures frames whose
+    -- rects are secret there (FrameUtil), and the game's own menu stops working. So only where IsInInstance()
+    -- reads a plain false; anywhere else (true, secret, or the call failing) one line says why, and nothing opens.
+    -- The client answers IsInInstance with a SECRET boolean in places - the mock does too.
+    local keepII, keepSV, keepFF = _G.IsInInstance, rawget(_G, "issecretvalue"), rawget(_G, "FriendsFrame_ShowDropdown")
+    local SECRET = setmetatable({}, { __eq = function() error("attempt to compare a secret boolean value", 2) end })
+    _G.issecretvalue = function(v) return rawequal(v, SECRET) end
+    local ffOpened
+    _G.FriendsFrame_ShowDropdown = function() ffOpened = true end
+    for _, case in ipairs({ { "in a dungeon", function() return true, "party" end },
+                            { "a secret answer", function() return SECRET, "party" end },
+                            { "the call failing", function() error("no") end } }) do
+        menu, ffOpened = nil, nil
+        _G.IsInInstance = case[2]
+        local before = #said
+        kioRow:Click("RightButton")
+        H.ok(menu == nil and ffOpened == nil, case[1] .. ": the game's player menu is NOT opened")
+        local line = table.concat(said, "\n", before + 1, #said)
+        H.ok(#said == before + 1 and line:find("instance", 1, true), case[1] .. ": one line says why", line)
+    end
+    _G.IsInInstance = function() return false, "none" end
+    menu = nil
+    kioRow:Click("RightButton")
+    H.ok(menu and menu.name == "Kio Alpha", "out in the world (a plain false): the menu opens as before")
+    _G.IsInInstance, _G.issecretvalue, _G.FriendsFrame_ShowDropdown = keepII, keepSV, keepFF
     _G.UnitPopup_OpenMenu = nil
     NS.Books().record.nights["2026-10-09"].raiders.Kio = nil
 
@@ -2234,6 +2325,12 @@ do
         .. '],"displayTitle":"Raid night","time":"20:00","startTime":' .. start .. '}'
     local function online(name) fire("CHAT_MSG_SYSTEM", ("|Hplayer:%s-Realm|h[%s]|h has come online."):format(name, name)) end
 
+    -- a new install starts with the pop-up off (Forever 1.0): a roster and raid time arm nothing
+    H.ok(_G.BiSGuildDB.logins == false and not L.Armed(), "a new install: the login pop-up starts off, never armed")
+    online("Kio Alpha")
+    H.eq(#L.waiting, 0, "and a login on the roster pops nothing up")
+    L.told = {}
+    _G.SlashCmdList.BISGUILD("logins on")
     H.ok(L.Armed(), "a roster pasted, raid in an hour, on my own: armed")
     online("Kio Alpha")
     H.eq(#L.waiting, 1, "Kio logs in: on the roster, so he waits for an invite")
@@ -2405,6 +2502,11 @@ do
     _G.GetGuildRosterInfo = function(i) local r = ROSTER[i] if r then return r[1], r[2], 0, 30, r[3], "Durotar", "", "", true, 0, r[3] end end
     _G.RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 } }
     NS.K._guildDirty = true
+    lib.spots = {}
+    -- a new install starts with the dots off (Forever 1.0): nothing is drawn until the player switches them on
+    lib.spots.Bob = { map = 1411, x = 0.5, y = 0.4, at = H.clock }
+    H.ok(_G.BiSGuildDB.mapDots == false and M.Update() == 0, "a new install: the dots start off, nothing drawn")
+    _G.SlashCmdList.BISGUILD("dots on")
     lib.spots = {}
     H.eq(M.Update(), 0, "nobody sharing: no dots")
 
@@ -2706,7 +2808,15 @@ do
     C.Hear("Bea", "0.0.0", OLDFP, ".x")
     H.eq(C.Summary().newer, 0, "the same version and an older one: nothing newer")
     H.ok(not C.toldOld, "so nothing said")
+    -- THE NOTE HAS A SWITCH NOW, OFF FOR A NEW INSTALL (Forever 1.0): the shared lib's /biscomm ver lists the
+    -- versions and speaks up only for a critical one, so a chat line on every newer copy is a nag for a new player
     local before = #said
+    H.eq(_G.BiSGuildDB.versionNote, false, "a new install: the newer-version note starts off")
+    C.Hear("Eve", "9.0.0", "-", ".")
+    H.eq(#said, before, "a newer copy heard: written down, nothing said in chat")
+    H.eq(C.Summary().newer, 1, "but the book still knows")
+    _G.BiSGuildDB.versionNote = true                     -- an existing save, frozen on (or the switch turned on)
+    before = #said
     C.Hear("Eve", "9.0.0", "-", ".")
     local told = table.concat(said, "\n", before + 1)
     H.ok(told:find("1 guildmate(s) run BiS Guild 9.0.0", 1, true) and told:find("CurseForge", 1, true),
@@ -2753,6 +2863,7 @@ do
 
     NS.Books().copies = nil
     C.toldOld, C.waiting, C.lastSent = nil, nil, nil
+    _G.BiSGuildDB.versionNote = false
     _G.GetNumGuildMembers, _G.GetGuildRosterInfo = realNum, realInfo
     X._ranksDirty = true
     drain()
@@ -3205,6 +3316,210 @@ do
     K.Hide()
     _G.GetNumGuildMembers, _G.GetGuildRosterInfo = realNum, realInfo
     X._ranksDirty = true
+end
+
+--=============================================================================
+-- FOREVER 1.0: ONE OPTIONS HOME (Arn, 7 Nov: "when they open the options, they go to add-ons ... they'll just see
+-- BiS> ... click into that add-on"). Every extra a new install starts with OFF has a switch here, and every switch
+-- runs the same function as its slash command. No minimap button - BiS Guild never had one.
+--=============================================================================
+H.section("Forever 1.0: the options window and the BiS> page")
+do
+    local O, T, L, M, C = NS.Opt, _G.BiSTheme, NS.Login, NS.Pins, NS.Copy
+    H.ok(T.OPTIONS_MINOR and T.OPTIONS_MINOR >= 4 and T.Options, "the shared options kit loaded")
+    local f = O.Build()
+    H.ok(f and f:GetName() == "BiSGuildOptions" and not f:IsShown(), "the window builds, named, and starts hidden")
+    H.eq(O.Build(), f, "built once")
+    local rowsBy = {}
+    for _, r in ipairs(f.rows) do if r.opt then rowsBy[r.opt.key] = r end end
+    -- every quiet-start extra has a visible switch, and the channel's two
+    for _, key in ipairs({ "logins", "mapDots", "versionNote", "comm", "commShare" }) do
+        H.ok(rowsBy[key] and rowsBy[key].opt.kind == "toggle", "a switch for " .. key)
+    end
+    for key in pairs(NS.QUIET) do H.ok(rowsBy[key] ~= nil, "quiet-start key " .. key .. " can be switched on in the window") end
+    H.ok(rowsBy.terminal and rowsBy.terminal.opt.kind == "button", "and a button to the terminal")
+    H.ok(math.abs(f:GetWidth() / f:GetHeight() - 1.43) < 0.02, "the family's 1.43:1",
+         ("%d x %d"):format(f:GetWidth(), f:GetHeight()))
+    -- every clickable row pops under the mouse (the standing rule): the kit hooks the row and its control
+    H.ok(rowsBy.logins.hoverable and rowsBy.logins.lit and rowsBy.logins.bar, "rows pop under the mouse (wash + bar)")
+    rowsBy.logins._scripts.hook_OnEnter(rowsBy.logins)
+    H.ok(rowsBy.logins.lit:GetAlpha() > 0 and rowsBy.logins.bar:GetAlpha() == 1, "and light up when hovered")
+    rowsBy.logins.ctl._scripts.OnEnter(rowsBy.logins.ctl)
+    H.ok(rowsBy.logins.ctl.wash:GetAlpha() > 0, "its box too")
+
+    -- a switch does what its slash command does (earlier sections switched dots and logins on, as a player would)
+    _G.SlashCmdList.BISGUILD("dots off")
+    _G.SlashCmdList.BISGUILD("logins off")
+    f:Paint()
+    H.ok(not rowsBy.mapDots.ctl.on and not rowsBy.logins.ctl.on and not rowsBy.versionNote.ctl.on,
+         "a new install: the three extras paint off")
+    lib.spots = { Bob = { map = 1411, x = 0.5, y = 0.4, at = H.clock } }
+    rowsBy.mapDots.ctl:Click()
+    H.ok(_G.BiSGuildDB.mapDots == true and M.On() and rowsBy.mapDots.ctl.on, "dots: on from the window, saved, painted")
+    rowsBy.mapDots.ctl:Click()
+    H.ok(_G.BiSGuildDB.mapDots == false and M.Update() == 0, "and off again: no dots")
+    L.waiting = { { name = "Kio Alpha", key = "kio alpha" } }
+    rowsBy.logins.ctl:Click()
+    H.ok(_G.BiSGuildDB.logins == true and L.On(), "logins: on from the window")
+    rowsBy.logins.ctl:Click()
+    H.ok(_G.BiSGuildDB.logins == false and #L.waiting == 0, "off: and whoever was waiting goes with the window")
+    rowsBy.versionNote.ctl:Click()
+    H.ok(_G.BiSGuildDB.versionNote == true and C.NoteOn(), "the newer-version note: on from the window")
+    _G.SlashCmdList.BISGUILD("note off")
+    H.ok(_G.BiSGuildDB.versionNote == false and not C.NoteOn(), "/bisg note off: the same switch")
+    f:Paint()
+    H.ok(not rowsBy.versionNote.ctl.on, "and the window shows it")
+    rowsBy.comm.ctl:Click()
+    H.ok(not lib:Enabled() and _G.BiSGuildDB.comm == false, "the BiS channel: off from the window, and saved at once")
+    rowsBy.comm.ctl:Click()
+    H.ok(lib:Enabled() and _G.BiSGuildDB.comm == true, "and on again")
+    local share = lib:Sharing()
+    rowsBy.commShare.ctl:Click()
+    H.ok(lib:Sharing() == not share and _G.BiSGuildDB.commShare == lib:Sharing(), "share my spot: flips, saved")
+    rowsBy.commShare.ctl:Click()
+    H.eq(lib:Sharing(), share, "and back")
+    rowsBy.terminal.ctl:Click()
+    H.ok(NS.K.frame and NS.K.frame:IsShown(), "the terminal button opens the terminal")
+    NS.K.Hide()
+
+    -- the BiS> page: the game's Settings panel stood in as Forever's does where it matters (BiSTheme/dev/tests.lua
+    -- section 10): a subcategory needs a REGISTERED parent, an unknown id opens nothing, categories answer GetID
+    H.eq(O.Register(), nil, "no game options panel: no page, no error")
+    local reg, opened, nextId = {}, {}, 0
+    local function Category(name)
+        nextId = nextId + 1
+        local c = { name = name, id = nextId }
+        function c:GetID() return self.id end
+        reg[c.id] = c
+        return c
+    end
+    _G.Settings = {
+        RegisterCanvasLayoutCategory = function(frame, name) local c = Category(name) c.frame = frame return c, {} end,
+        RegisterAddOnCategory = function(c) c.addon = true end,
+        RegisterCanvasLayoutSubcategory = function(parent, frame, name)
+            if not (parent and parent.addon) then error("parent category is not registered") end
+            local c = Category(name) c.frame, c.parentCat = frame, parent
+            return c, {}
+        end,
+        OpenToCategory = function(id) if not reg[id] then return false end opened[#opened + 1] = reg[id].name return true end,
+    }
+    fire("PLAYER_LOGIN")
+    local page = T.settingsPages.BiSGuild
+    H.ok(page and page.category and page.category.name == "BiS> Guild" and page.category.parentCat.name == "BiS>",
+         "at login: BiS> Guild, under the one BiS> entry")
+    local spec = page and page.spec or {}
+    H.eq(spec.status and spec.status(), "logins off  -  dots off  -  note off", "the front page says what is on")
+    H.ok(spec.api and spec.api.name == "BiSGuildAPI" and _G.BiSGuildAPI ~= nil, "and names the API table, which exists")
+    H.ok(spec.open and spec.open.label == "the terminal", "the page's big button: the terminal")
+    spec.open.func()
+    H.ok(NS.K.frame:IsShown(), "which opens it")
+    NS.K.Hide()
+    -- THE DASHBOARD (Settings minor 3, the family rule - Arn, 8 Nov, of BiS> Tools: "it looks way way better do it
+    -- for the other ones"): the page draws itself from the window's own rows and never takes the window in
+    H.ok(T.SETTINGS_MINOR == 3 and T.Dashboard, "the kit's Settings minor 3: the whole dashboard")
+    H.ok(spec.build and spec.refresh and spec.window == nil, "the page is a dashboard, not the options window in a box")
+    f:Hide()
+    local parentBefore, scaleBefore = f:GetParent(), f:GetScale()
+    -- a spy on the note's setter BEFORE the page is first drawn: the section switch must take this road
+    local realSetNote, noteCalls = O.SetNote, 0
+    O.SetNote = function(on) noteCalls = noteCalls + 1 return realSetNote(on) end
+    T.ShowSettingsPage("BiSGuild")
+    H.ok(f:GetParent() == parentBefore and f:GetScale() == scaleBefore and not f:IsShown(),
+         "showing the page leaves the options window alone: same parent, same scale, still hidden")
+    H.ok(not (page.frame.optBtn and page.frame.optBtn:IsShown()), "no stand-in button: the dashboard is the page")
+    local d = page.frame.body.dash
+    local titles = {}
+    for i, r in ipairs(d and d.rows or {}) do titles[i] = r.entry.title end
+    H.eq(table.concat(titles, ", "), "the terminal, login pop-up, map dots, the BiS channel, version note",
+         "a row per section down the left")
+    H.ok(d.list.head:GetText() == "SECTIONS" and d.selected == "terminal", "the list's title; the terminal picked first")
+    for _, r in ipairs(d.rows) do
+        H.ok(not r.lamp._all and r.lamp._w == 8 and not r.bar._all and r.bar._w == 3,
+             "a row's lamp and bar are their own size: " .. r.entry.title)
+        H.ok(r.entry.desc and #r.entry.desc > 20, "every section says what it is for: " .. r.entry.title)
+    end
+    H.eq(d.count:GetText(), "1 of 4 on", "how many are on (only the BiS channel, a new install's quiet start)")
+    -- the terminal: no switch of its own, a button to it, its command
+    H.ok(not d.detail.switch:IsShown() and d.detail.open:IsShown() and d.detail.none:IsShown(),
+         "the terminal: always on, nothing to set, a button to open it")
+    H.eq(d.detail.usage:GetText(), "command:  /bisg", "and its command at the foot")
+    d.detail.open:Click()
+    H.ok(NS.K.frame:IsShown(), "which opens the terminal")
+    NS.K.Hide()
+    -- pick a section: its words and its switch
+    local rowBy = {}
+    for _, r in ipairs(d.rows) do rowBy[r.entry.key] = r end
+    rowBy.dots:Click("LeftButton")
+    H.ok(d.selected == "dots" and d.detail.name:GetText() == "map dots" and d.detail.switch:IsShown()
+         and not d.detail.switch.on, "click map dots: its name, its switch (off)")
+    H.eq(d.detail.usage:GetText(), "command:  /bisg dots on | off", "and its slash command")
+    -- the big switch: the SAME saved value the options window shows, and the window agrees after its Paint
+    d.detail.switch:Click()
+    H.ok(_G.BiSGuildDB.mapDots == true and M.On() and d.detail.switch.on and rowBy.dots.state:GetText() == "ON",
+         "the big switch: dots on, saved, the list follows")
+    f:Paint()
+    H.ok(rowsBy.mapDots.ctl.on, "the options window's row agrees")
+    _G.SlashCmdList.BISGUILD("dots off")
+    spec.refresh(page.frame.body)
+    H.ok(not d.detail.switch.on and rowBy.dots.state:GetText() == "off", "/bisg dots off: the page shows it on its next paint")
+    -- right-click in the list: the logins setter (whoever was waiting goes with the window - only SetLogins does that)
+    L.waiting = { { name = "Kio Alpha", key = "kio alpha" } }
+    rowBy.logins:Click("RightButton")
+    H.ok(_G.BiSGuildDB.logins == true and L.On(), "right-click login pop-up: on")
+    rowBy.logins:Click("RightButton")
+    H.ok(_G.BiSGuildDB.logins == false and #L.waiting == 0, "and off, through SetLogins: the waiting list went with it")
+    -- a section switch goes through the same setter as its slash command
+    rowBy.note:Click("LeftButton")
+    d.detail.switch:Click()
+    H.ok(noteCalls == 1 and _G.BiSGuildDB.versionNote == true and C.NoteOn(), "version note: on, through O.SetNote")
+    _G.SlashCmdList.BISGUILD("note off")
+    H.ok(noteCalls == 2 and not C.NoteOn(), "/bisg note off: the same O.SetNote")
+    O.SetNote = realSetNote
+    -- the BiS channel: its own switch, and sharing your spot as a setting row under it
+    rowBy.comm:Click("LeftButton")
+    local commRows = d.pages.comm or {}
+    H.ok(d.detail.switch.on and #commRows == 1 and commRows[1].opt.key == "commShare", "the BiS channel: on, and share my spot under it")
+    local shareWas = lib:Sharing()
+    commRows[1].sw:Click()
+    H.ok(lib:Sharing() == not shareWas and _G.BiSGuildDB.commShare == lib:Sharing(), "share my spot from the page: flips, saved")
+    f:Paint()
+    H.eq(rowsBy.commShare.ctl.on, lib:Sharing(), "and the options window's row agrees after its Paint")
+    commRows[1].sw:Click()
+    H.eq(lib:Sharing(), shareWas, "and back")
+    d.detail.switch:Click()
+    H.ok(not lib:Enabled() and _G.BiSGuildDB.comm == false and commRows[1].dim, "channel off from the page: saved, its row greyed")
+    rowBy.comm:Click("RightButton")
+    H.ok(lib:Enabled() and _G.BiSGuildDB.comm == true, "right-click: on again")
+    -- pointing at a section reads its words in the help strip
+    rowBy.dots._scripts.OnEnter(rowBy.dots)
+    H.eq(d.help.text:GetText(), rowBy.dots.entry.desc, "a list row pops and reads its words")
+    rowBy.dots._scripts.OnLeave(rowBy.dots)
+    -- an open options window is repainted when the page changes something
+    f:Show()
+    rowBy.dots:Click("RightButton")
+    H.ok(_G.BiSGuildDB.mapDots == true and rowsBy.mapDots.ctl.on, "the window, open, repaints when the page flips a switch")
+    rowBy.dots:Click("RightButton")
+    f:Hide()
+    H.ok(f:GetParent() == parentBefore and f:GetScale() == scaleBefore, "the options window was never re-parented")
+    T.HideSettingsPage("BiSGuild")
+    H.ok(not f:IsShown() and f:GetParent() == parentBefore, "leaving the page gives nothing back - nothing was taken")
+    local before = #opened
+    _G.SlashCmdList.BISGUILD("options")
+    H.ok(f:IsShown() and #opened == before, "/bisg options opens the options window itself, not the game's options")
+    f:Hide()
+    H.ok(T.OpenSettings("BiSGuild") and opened[#opened] == "BiS> Guild", "(the family's OpenSettings still reaches the page)")
+    _G.Settings = nil
+    T.settingsPages.BiSGuild.category = nil
+    _G.SlashCmdList.BISGUILD("options")
+    H.ok(f:IsShown(), "without the game's panel too")
+    f:Hide()
+    T.settingsRoot, T.settingsPages, T.settingsOrder = nil, {}, {}
+
+    -- NO MINIMAP BUTTON (BiS Guild never had one; /bisg and the BiS> page are the doors)
+    H.ok(not listed("Libs/BiSTheme/Minimap.lua") and T.Minimap == nil, "no minimap button: the kit is not even loaded")
+    -- and still no fingerprint of BiS Guild's own (dropped 18 Oct): the kit's help strip may name the build at rest
+    H.ok(NS.BUILD == nil and bytes(ROOT .. "/Core/Build.lua") == nil, "BiS Guild carries no build fingerprint of its own")
+    _G.SlashCmdList.BISGUILD("help")
 end
 
 H.report()

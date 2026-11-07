@@ -107,9 +107,15 @@ function C.Summary()
     return s
 end
 
+--- THE NOTE HAS A SWITCH (Forever 1.0, 7 Nov 2026): `versionNote`, OFF for a new install - the shared lib's
+--- `/biscomm ver` lists every BiS version about and speaks up only for a critical one, so a line in chat for every
+--- newer copy is a nag to a new player. An existing save was frozen ON (it always spoke). Versions are still heard
+--- and written down either way; only the chat line waits for the switch.
+function C.NoteOn() return ns.DB().versionNote == true end
+
 --- Say it once a session, and only when it is worth saying.
 function C.Judge()
-    if C.toldOld then return end
+    if C.toldOld or not C.NoteOn() then return end
     local s = C.Summary()
     if s.newer >= 1 then
         C.toldOld = true

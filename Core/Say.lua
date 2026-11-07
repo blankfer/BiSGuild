@@ -25,9 +25,11 @@ function ns.Say(cmd, rest)
     end
     -- `/bisg dots on|off`: guildmates on the world map (Core/Pins.lua)
     -- `/bisg logins on|off`: "X just logged in - invite?" (Core/Logins.lua)
+    -- `/bisg note on|off`: "a guildmate runs a newer version" in chat (Core/Copies.lua)
+    -- each one through the SAME setter as its switch in the options window (Core/Options.lua)
     if cmd == "logins" and ns.Login then
         local r = rest:lower()
-        if r == "on" or r == "off" then ns.DB().logins = (r == "on") end
+        if r == "on" or r == "off" then ns.Opt.SetLogins(r == "on") end
         ns.Print("login pop-up for the pasted roster: %s%s. %s", ns.Login.On() and ns.T.text("good", "on")
             or ns.T.text("warn", "off"), ns.Login.Armed() and " (armed now)" or "",
             ns.T.text("muted", "/bisg logins on | off"))
@@ -35,10 +37,22 @@ function ns.Say(cmd, rest)
     end
     if cmd == "dots" and ns.Pins then
         local r = rest:lower()
-        if r == "on" or r == "off" then ns.DB().mapDots = (r == "on") end
+        if r == "on" or r == "off" then ns.Opt.SetDots(r == "on") end
         local n = ns.Pins.Update()
         ns.Print("guildmates on the world map: %s - %d dot(s) now. %s", ns.Pins.On() and ns.T.text("good", "on")
             or ns.T.text("warn", "off"), n, ns.T.text("muted", "/bisg dots on | off"))
+        return
+    end
+    if cmd == "note" and ns.Copy then
+        local r = rest:lower()
+        if r == "on" or r == "off" then ns.Opt.SetNote(r == "on") end
+        ns.Print("newer-version note in chat: %s. %s", ns.Copy.NoteOn() and ns.T.text("good", "on")
+            or ns.T.text("warn", "off"), ns.T.text("muted", "/bisg note on | off  -  /biscomm ver lists them all"))
+        return
+    end
+    -- `/bisg options`: the BiS> page in the game's options (or the window on its own)
+    if cmd == "options" or cmd == "config" or cmd == "settings" then
+        if ns.Opt then ns.Opt.Open() end
         return
     end
     -- `/bisg mapwhy`: what the WHERE map's last drawing got from the game (16 Oct: Zephras Isle fog)
@@ -136,8 +150,10 @@ function ns.Say(cmd, rest)
         -- the PowerShell road (window, logs, script, report) still works and is not listed: it is
         -- the officers' own since 18 Oct (Core/Report.lua)
         ns.Print("  %s  read a raid: the notebook's link, and its text in", ns.T.text("accent", "/bisg paste"))
+        ns.Print("  %s  every switch, in one window (also Esc > Options > AddOns > BiS>)", ns.T.text("accent", "/bisg options"))
         ns.Print("  %s  guildmates' dots on the world map", ns.T.text("accent", "/bisg dots on | off"))
         ns.Print("  %s  'X just logged in - invite?' for the pasted roster", ns.T.text("accent", "/bisg logins on | off"))
+        ns.Print("  %s  a line in chat when a guildmate runs a newer version", ns.T.text("accent", "/bisg note on | off"))
         return
     end
     -- ANYTHING ELSE IS THE REPORT. There used to be an `all()` here reading the addon's own

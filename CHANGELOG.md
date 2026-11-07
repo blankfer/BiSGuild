@@ -1,5 +1,13 @@
 # BiSGuild
 
+## 1.0.0 - Forever 1.0
+
+- **A new install starts quiet.** Only the main job is on: the raider terminal (`/bisg`) and the raid record. The "X just logged in - invite?" pop-up, guildmates' dots on the world map and the "a guildmate runs a newer version" line in chat start off, until you switch them on. **Already using BiS Guild? Nothing changes for you** - every switch stays as you had it.
+- **Options, in one place.** BiS Guild has an options window now: **Esc > Options > AddOns > BiS> > BiS> Guild**, or `/bisg options`. Switches for the login pop-up, the map dots, the newer-version note, the shared BiS channel and sharing your spot, and a button to the terminal. The slash commands still work and do exactly the same.
+- BiS> Guild in Esc > Options > AddOns is a full-page dashboard now: every section down the left, its settings big and readable on the right.
+- **New: `/bisg note on | off`** for the newer-version line in chat. `/biscomm ver` lists every BiS version in your guild either way.
+- **Fixed: right-clicking a name inside a dungeon or raid broke the game's own menus.** Inside an instance the right-click now says so in one line instead; out in the world it opens the player menu as before.
+
 ## 0.5.4
 
 - **Which BiS versions your guild runs:** `/biscomm ver` lists every BiS addon around you, who has the newest, and which release is marked critical. Nothing is said unless an update is critical (or your copy is too old to talk to a guildmate's) - then one line, once, never in a fight.
