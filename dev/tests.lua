@@ -1187,6 +1187,21 @@ do
     -- the guild is listed (Kumlust, no raids): the long hint would print THROUGH his row (Arn, 5 Nov
     -- screenshot) - so the panel keeps its rows and the status line says where nights come from
     H.ok(f.pages.raiders.grid.rows[1]:IsShown(), "the guild is listed with no nights")
+    -- THE ROW POPS UNDER THE MOUSE (Arn, 6 Nov, the family rule): a stronger tint and a bright bar on the left - both
+    -- on the HIGHLIGHT layer, which the client draws over the text, so the tint stays a tint (16 Oct: 0.8 washed the
+    -- words out) and the bar does the popping
+    do
+        local row = f.pages.raiders.grid.rows[1]
+        local tint, bar
+        for _, t in ipairs(row._regions or {}) do
+            if t._layer == "HIGHLIGHT" and t._color then
+                if t._w == 2 then bar = t elseif t._all then tint = t end
+            end
+        end
+        H.ok(tint and tint._color[4] >= 0.25 and tint._color[4] <= 0.35, "a row's hover tint: clear, still a tint",
+             tint and tint._color[4])
+        H.ok(bar and bar._color[4] == 1, "and a bright bar on its left edge")
+    end
     H.ok(not f.pages.raiders.panel.hint:IsShown(), "so no hint over the rows")
     H.ok(f.pages.raiders.panel.hint:GetText():find("LOG", 1, true), "the hint, for an empty list, says where the nights come from")
     f.keys.raiders:Click()
@@ -1843,6 +1858,12 @@ do
 
     _G.GetItemInfo = nil
     NS.Books().record = saved
+end
+
+H.section("ESC closes the logins window too (6 Nov: the family audit found it had none)")
+do
+    local lf = NS.Login and NS.Login.Build and NS.Login.Build()
+    H.ok(lf and lf:GetScript("OnKeyDown") ~= nil, "BiSGuildLogins listens for Escape (ns.EscKeys, combat-safe)")
 end
 
 H.section("ESC in combat (Arn, 16 Oct: ADDON_ACTION_BLOCKED opening the terminal mid-fight)")

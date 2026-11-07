@@ -1,5 +1,9 @@
 # BiSGuild
 
+## 0.5.3
+
+- **Buttons and rows pop under the mouse** (a clearer tint and a bar on the left), and Escape closes the logins window.
+
 ## 0.5.2
 
 - **No more text over the raider list.** Before your guild's first logged raid, the RAIDERS tab printed its "no raid nights yet" note straight through the guild's names. The note now goes on the line above the list.

@@ -34,7 +34,9 @@ K.LIST_ROWS = 27
 K.STRIP = 12                   -- nights in an attendance strip
 -- THE HOVER IS A TINT, NOT A COVER (Arn's screenshot, 16 Oct: the hovered row's item went faded).
 -- The client draws the HIGHLIGHT layer above the text, so a highlight at 0.8 washes the words out.
-K.HOVER = 0.18
+-- AND IT POPS (Arn, 6 Nov, the family rule: "if you hover a row it should pop"): the tint up to 0.28 - still a tint -
+-- and a bright 2 px bar on the left edge, which covers no words. K.Pop puts both on a button's HIGHLIGHT layer.
+K.HOVER = 0.28
 K.WHERE_EVERY = 5              -- seconds between redraws of the WHERE page while it shows
 K.GLANCE_W = 470               -- the raid-night line on the right of the command bar
 -- THE ROSTER, KEPT FRESH (Arn, 16 Oct: "3 guildmates online and it only shows 2 - can the window update
@@ -410,6 +412,20 @@ local function Fill(region, name, a)
     region:SetColorTexture(r, g, b, a or 1)
 end
 
+--- A button's hover: the tint over it and the bar on its left, both on the HIGHLIGHT layer (the client shows that
+--- layer while the mouse is on the button - no script needed). Returns the tint.
+function K.Pop(b)
+    local hi = b:CreateTexture(nil, "HIGHLIGHT")
+    hi:SetAllPoints()
+    Fill(hi, "accent", K.HOVER)
+    local bar = b:CreateTexture(nil, "HIGHLIGHT")
+    bar:SetPoint("TOPLEFT") bar:SetPoint("BOTTOMLEFT")
+    bar:SetWidth(2)
+    Fill(bar, "accent", 1)
+    b.popTint, b.popBar = hi, bar
+    return hi
+end
+
 local function Text(parent, size, colour, justify)
     local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     if fs.SetFont then pcall(fs.SetFont, fs, K.FONT, size or 12, "") end
@@ -474,9 +490,7 @@ local function Grid(parent, heads, cols, n, y0, onClick, onHead)
             local b = CreateFrame("Button", nil, parent)
             b:SetPoint("TOPLEFT", x, -y0 + 2)
             b:SetSize(c[1], K.ROW)
-            local hi = b:CreateTexture(nil, "HIGHLIGHT")
-            hi:SetAllPoints()
-            Fill(hi, "accent", K.HOVER)
+            local hi = K.Pop(b)
             b:SetScript("OnClick", function() g.offset = 0 onHead[i]() end)
             g.headButtons[i] = b
         end
@@ -486,9 +500,7 @@ local function Grid(parent, heads, cols, n, y0, onClick, onHead)
         local row = CreateFrame("Button", nil, parent)
         row:SetPoint("TOPLEFT", 2, -(y0 + r * K.ROW))
         row:SetSize(x - 2, K.ROW)
-        local hi = row:CreateTexture(nil, "HIGHLIGHT")
-        hi:SetAllPoints()
-        Fill(hi, "accent", K.HOVER)
+        local hi = K.Pop(row)
         row.cells = {}
         local cx = 4
         for i, c in ipairs(cols) do
@@ -521,9 +533,7 @@ local function BarButton(parent, label, w, point, x, fn)
     local bg = b:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
     Fill(bg, "sunken")
-    local hi = b:CreateTexture(nil, "HIGHLIGHT")
-    hi:SetAllPoints()
-    Fill(hi, "accent", K.HOVER)
+    local hi = K.Pop(b)
     b.fs = Text(b, 11, "gold", "CENTER")
     b.fs:SetPoint("CENTER", 0, 0)
     b.fs:SetText(label)
@@ -629,9 +639,7 @@ function K.Build()
         b.bg = b:CreateTexture(nil, "BACKGROUND")
         b.bg:SetAllPoints()
         Fill(b.bg, "sunken")
-        local hi = b:CreateTexture(nil, "HIGHLIGHT")
-        hi:SetAllPoints()
-        Fill(hi, "accent", K.HOVER)
+        local hi = K.Pop(b)
         b.fs = Text(b, 11, "ink", "CENTER")
         b.fs:SetPoint("CENTER", 0, 0)
         b.fs:SetText(k[1])
