@@ -1,6 +1,6 @@
 # BiSGuild
 
-## Unreleased
+## 0.5.3
 
 - **Buttons and rows pop under the mouse** (a clearer tint and a bar on the left), and Escape closes the logins window.
 
