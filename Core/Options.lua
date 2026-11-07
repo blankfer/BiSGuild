@@ -7,7 +7,9 @@
 
     * a small options window, BiSTheme's shared kit (Libs\BiSTheme\Options.lua, canon bytes) - the login pop-up,
       the world-map dots, the newer-version note, the shared channel and sharing your spot;
-    * held inside "BiS> Guild" in the game's own options (Esc > Options > AddOns > BiS>), registered at PLAYER_LOGIN;
+    * "BiS> Guild" in the game's own options (Esc > Options > AddOns > BiS>), registered at PLAYER_LOGIN: BiSTheme's
+      full-page dashboard (Settings minor 3), its sections made from this window's own rows (O.Entries) - the
+      window itself stays the window, never taken into the page;
     * every switch calls the SAME function its slash command does (O.Set*), so the two can never disagree.
 
   NO MINIMAP BUTTON. BiS Guild never had one; the doors are `/bisg` (the terminal), `/bisg options` and the BiS> page.
@@ -157,6 +159,48 @@ function O.Status()
         w(ns.Copy and ns.Copy.NoteOn()))
 end
 
+--- The BiS> page's sections (BiSTheme's dashboard, Settings minor 3 - the family rule). Built from the options
+--- window's OWN rows (O.Rows), never a second copy: a section's switch is its row's get/set, so it runs the same
+--- O.Set* as the window and the slash command.
+function O.Entries()
+    local db = ns.DB()
+    local by = {}
+    for _, opt in ipairs(O.Rows()) do by[opt.key] = opt end
+    local function switch(opt)
+        return { get = function() return opt.get(db) end, set = function(on) opt.set(db, on) end }
+    end
+    return {
+        { key = "terminal", title = "the terminal", db = db, options = {},
+          desc = "The guild's raid record in one window: raiders, bosses, where everyone is, the roster and recruits. "
+              .. "It is always on.",
+          open = { label = "open the terminal", func = by.terminal.action }, usage = "/bisg" },
+        { key = "logins", title = "login pop-up", db = db, options = {}, switch = switch(by.logins),
+          desc = "On raid night, with a roster pasted and you leading: a small window when someone on it logs in, so "
+              .. "you can invite them. Off: no window, and nobody's lateness is written down.",
+          usage = "/bisg logins on | off" },
+        { key = "dots", title = "map dots", db = db, options = {}, switch = switch(by.mapDots),
+          desc = "Guildmates who run a BiS addon, as dots on the game's world map. Your own group is left out - the "
+              .. "game already draws them.",
+          usage = "/bisg dots on | off" },
+        { key = "comm", title = "the BiS channel", db = db, options = { by.commShare }, switch = switch(by.comm),
+          desc = "The hidden addon channel every BiS addon shares - how the raid record reaches your guild. Off: you "
+              .. "hear nothing and send nothing.",
+          usage = "/biscomm on | off  -  /biscomm share on | off" },
+        { key = "note", title = "version note", db = db, options = {}, switch = switch(by.versionNote),
+          desc = "One line in chat when a guildmate runs a newer BiS Guild, so you know to update.",
+          usage = "/bisg note on | off  -  /biscomm ver lists every version either way" },
+    }
+end
+
+--- What the page draws with: the sections, and the options window repainted when the page changes something.
+function O.Model()
+    return {
+        entries = O.Entries,
+        list = "SECTIONS",
+        onChange = function() if O.frame and O.frame:IsShown() then O.frame:Paint() end end,
+    }
+end
+
 function O.Register()
     local T = _G.BiSTheme
     if not (T and T.SettingsPage) then return nil end
@@ -165,7 +209,8 @@ function O.Register()
         about = "The guild's raid record, read from the combat log: who came, consumables, deaths, bosses. "
             .. "The terminal (/bisg) is the main window; the switches below are the extras.",
         status = O.Status,
-        window = function() return O.Build() end,
+        build = function(body) O.dash = T.Dashboard(body, O.Model()) end,
+        refresh = function() if O.dash then O.dash:Paint() end end,
         open = { label = "the terminal", func = function() if ns.K and ns.K.Show then ns.K.Show() end end },
         api = { name = "BiSGuildAPI", about = "the guild's raid record, read-only - nights, raiders, bosses - and "
             .. "opening the terminal" },

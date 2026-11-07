@@ -3414,19 +3414,93 @@ do
     spec.open.func()
     H.ok(NS.K.frame:IsShown(), "which opens it")
     NS.K.Hide()
-    H.eq(spec.window(), f, "the page's window is this options window")
-    -- minor 2 (Arn 7 Nov: "dont just shrink remake them all"): the page never takes the window in
+    -- THE DASHBOARD (Settings minor 3, the family rule - Arn, 8 Nov, of BiS> Tools: "it looks way way better do it
+    -- for the other ones"): the page draws itself from the window's own rows and never takes the window in
+    H.ok(T.SETTINGS_MINOR == 3 and T.Dashboard, "the kit's Settings minor 3: the whole dashboard")
+    H.ok(spec.build and spec.refresh and spec.window == nil, "the page is a dashboard, not the options window in a box")
     f:Hide()
     local parentBefore, scaleBefore = f:GetParent(), f:GetScale()
+    -- a spy on the note's setter BEFORE the page is first drawn: the section switch must take this road
+    local realSetNote, noteCalls = O.SetNote, 0
+    O.SetNote = function(on) noteCalls = noteCalls + 1 return realSetNote(on) end
     T.ShowSettingsPage("BiSGuild")
     H.ok(f:GetParent() == parentBefore and f:GetScale() == scaleBefore and not f:IsShown(),
          "showing the page leaves the options window alone: same parent, same scale, still hidden")
-    local optBtn = page.frame.optBtn
-    H.ok(optBtn and optBtn:IsShown(), "the page has a button to the options window")
-    optBtn:Click()
-    H.ok(f:IsShown() and f:GetParent() == parentBefore and f:GetScale() == scaleBefore,
-         "which shows the window as it always was")
+    H.ok(not (page.frame.optBtn and page.frame.optBtn:IsShown()), "no stand-in button: the dashboard is the page")
+    local d = page.frame.body.dash
+    local titles = {}
+    for i, r in ipairs(d and d.rows or {}) do titles[i] = r.entry.title end
+    H.eq(table.concat(titles, ", "), "the terminal, login pop-up, map dots, the BiS channel, version note",
+         "a row per section down the left")
+    H.ok(d.list.head:GetText() == "SECTIONS" and d.selected == "terminal", "the list's title; the terminal picked first")
+    for _, r in ipairs(d.rows) do
+        H.ok(not r.lamp._all and r.lamp._w == 8 and not r.bar._all and r.bar._w == 3,
+             "a row's lamp and bar are their own size: " .. r.entry.title)
+        H.ok(r.entry.desc and #r.entry.desc > 20, "every section says what it is for: " .. r.entry.title)
+    end
+    H.eq(d.count:GetText(), "1 of 4 on", "how many are on (only the BiS channel, a new install's quiet start)")
+    -- the terminal: no switch of its own, a button to it, its command
+    H.ok(not d.detail.switch:IsShown() and d.detail.open:IsShown() and d.detail.none:IsShown(),
+         "the terminal: always on, nothing to set, a button to open it")
+    H.eq(d.detail.usage:GetText(), "command:  /bisg", "and its command at the foot")
+    d.detail.open:Click()
+    H.ok(NS.K.frame:IsShown(), "which opens the terminal")
+    NS.K.Hide()
+    -- pick a section: its words and its switch
+    local rowBy = {}
+    for _, r in ipairs(d.rows) do rowBy[r.entry.key] = r end
+    rowBy.dots:Click("LeftButton")
+    H.ok(d.selected == "dots" and d.detail.name:GetText() == "map dots" and d.detail.switch:IsShown()
+         and not d.detail.switch.on, "click map dots: its name, its switch (off)")
+    H.eq(d.detail.usage:GetText(), "command:  /bisg dots on | off", "and its slash command")
+    -- the big switch: the SAME saved value the options window shows, and the window agrees after its Paint
+    d.detail.switch:Click()
+    H.ok(_G.BiSGuildDB.mapDots == true and M.On() and d.detail.switch.on and rowBy.dots.state:GetText() == "ON",
+         "the big switch: dots on, saved, the list follows")
+    f:Paint()
+    H.ok(rowsBy.mapDots.ctl.on, "the options window's row agrees")
+    _G.SlashCmdList.BISGUILD("dots off")
+    spec.refresh(page.frame.body)
+    H.ok(not d.detail.switch.on and rowBy.dots.state:GetText() == "off", "/bisg dots off: the page shows it on its next paint")
+    -- right-click in the list: the logins setter (whoever was waiting goes with the window - only SetLogins does that)
+    L.waiting = { { name = "Kio Alpha", key = "kio alpha" } }
+    rowBy.logins:Click("RightButton")
+    H.ok(_G.BiSGuildDB.logins == true and L.On(), "right-click login pop-up: on")
+    rowBy.logins:Click("RightButton")
+    H.ok(_G.BiSGuildDB.logins == false and #L.waiting == 0, "and off, through SetLogins: the waiting list went with it")
+    -- a section switch goes through the same setter as its slash command
+    rowBy.note:Click("LeftButton")
+    d.detail.switch:Click()
+    H.ok(noteCalls == 1 and _G.BiSGuildDB.versionNote == true and C.NoteOn(), "version note: on, through O.SetNote")
+    _G.SlashCmdList.BISGUILD("note off")
+    H.ok(noteCalls == 2 and not C.NoteOn(), "/bisg note off: the same O.SetNote")
+    O.SetNote = realSetNote
+    -- the BiS channel: its own switch, and sharing your spot as a setting row under it
+    rowBy.comm:Click("LeftButton")
+    local commRows = d.pages.comm or {}
+    H.ok(d.detail.switch.on and #commRows == 1 and commRows[1].opt.key == "commShare", "the BiS channel: on, and share my spot under it")
+    local shareWas = lib:Sharing()
+    commRows[1].sw:Click()
+    H.ok(lib:Sharing() == not shareWas and _G.BiSGuildDB.commShare == lib:Sharing(), "share my spot from the page: flips, saved")
+    f:Paint()
+    H.eq(rowsBy.commShare.ctl.on, lib:Sharing(), "and the options window's row agrees after its Paint")
+    commRows[1].sw:Click()
+    H.eq(lib:Sharing(), shareWas, "and back")
+    d.detail.switch:Click()
+    H.ok(not lib:Enabled() and _G.BiSGuildDB.comm == false and commRows[1].dim, "channel off from the page: saved, its row greyed")
+    rowBy.comm:Click("RightButton")
+    H.ok(lib:Enabled() and _G.BiSGuildDB.comm == true, "right-click: on again")
+    -- pointing at a section reads its words in the help strip
+    rowBy.dots._scripts.OnEnter(rowBy.dots)
+    H.eq(d.help.text:GetText(), rowBy.dots.entry.desc, "a list row pops and reads its words")
+    rowBy.dots._scripts.OnLeave(rowBy.dots)
+    -- an open options window is repainted when the page changes something
+    f:Show()
+    rowBy.dots:Click("RightButton")
+    H.ok(_G.BiSGuildDB.mapDots == true and rowsBy.mapDots.ctl.on, "the window, open, repaints when the page flips a switch")
+    rowBy.dots:Click("RightButton")
     f:Hide()
+    H.ok(f:GetParent() == parentBefore and f:GetScale() == scaleBefore, "the options window was never re-parented")
     T.HideSettingsPage("BiSGuild")
     H.ok(not f:IsShown() and f:GetParent() == parentBefore, "leaving the page gives nothing back - nothing was taken")
     local before = #opened

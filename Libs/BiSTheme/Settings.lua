@@ -42,8 +42,8 @@
 ]]
 BiSTheme = BiSTheme or {}
 local T = BiSTheme
-if (T.SETTINGS_MINOR or 0) >= 2 then return end
-T.SETTINGS_MINOR = 2
+if (T.SETTINGS_MINOR or 0) >= 3 then return end
+T.SETTINGS_MINOR = 3
 
 -- palette fallback: only when this file is embedded and no other BiSTheme file ran (as the others do)
 if not T.rgb then
@@ -573,6 +573,219 @@ function T.DashControl(parent, opt, db, ctx)
   row.label:SetPoint("RIGHT", row, "RIGHT", -((row.ctlW or 0) + 20), 0)
   row:Paint()
   return row
+end
+
+--------------------------------------------------------------------
+-- THE WHOLE DASHBOARD (minor 3): BiS> Tools' page, ready-made for every addon
+--------------------------------------------------------------------
+-- Arn, 8 Nov 2026, of the BiS> Tools page: "it looks way way better do it for the other ones". The shape:
+--   left    a panel of SECTIONS - a row each, a lamp lit when it is on (a section with no switch has no lamp
+--           colour of its own), ON / off; click = look at it, right-click = switch it
+--   right   the picked one: its name, a big ON/OFF switch, an "open its window" button beside it, its words,
+--           every setting as a big row in ONE column (shorter rows when many, never two columns), its command at
+--           the foot
+--   bottom  the help strip
+-- model = { entries = { {key, title, desc, options, db, switch = {get, set}, open = {label, func}, usage} } (or a
+-- function answering that), list = "SECTIONS", idle = "...", onChange = function(entry, opt) } - the options are the
+-- same tables Options.lua takes, so an addon hands its sections over as they are. Answers d: d:Paint(), d:Select(key).
+T.SETTINGS.DASH.LIST_W, T.SETTINGS.DASH.LIST_ROW, T.SETTINGS.DASH.GAP, T.SETTINGS.DASH.MIN_STEP = 220, 26, 12, 27
+
+local Dash = {}
+Dash.__index = Dash
+
+function T.Dashboard(body, model)
+  local D = T.SETTINGS.DASH
+  local d = setmetatable({ body = body, model = model or {}, rows = {}, pages = {} }, Dash)
+  body.dash = d
+  local list = d.model.entries
+  d.entries = type(list) == "function" and list() or list or {}
+  d.help = T.DashHelp(body, d.model.idle or "Point at anything on this page to read what it does. Right-click a section in the list to switch it on or off.")
+  d.help:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 0, 0)
+  d.help:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", 0, 0)
+  d.list = T.DashPanel(body, d.model.list or "SECTIONS")
+  d.list:SetPoint("TOPLEFT", body, "TOPLEFT", 0, 0)
+  d.list:SetPoint("BOTTOMLEFT", d.help, "TOPLEFT", 0, D.GAP)
+  d.list:SetWidth(D.LIST_W)
+  d.count = fs(d.list, T.SETTINGS.BODY, "ink2", "")
+  d.count:SetPoint("TOPRIGHT", d.list, "TOPRIGHT", -10, -10)
+  for i, e in ipairs(d.entries) do
+    local r = CreateFrame("Button", nil, d.list)
+    if r.RegisterForClicks then r:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
+    r:SetHeight(D.LIST_ROW)
+    r:SetPoint("TOPLEFT", d.list, "TOPLEFT", 6, -(d.list.HEAD + (i - 1) * (D.LIST_ROW + 2)))
+    r:SetPoint("RIGHT", d.list, "RIGHT", -6, 0)
+    r.bg = tex(r, "BACKGROUND", "sunken", 1)
+    r.bg:SetAllPoints()
+    r.wash = tex(r, "BORDER", "accent", 0.35)
+    r.wash:SetAllPoints()
+    r.wash:SetAlpha(0)
+    -- the bar and the lamp are their OWN size: anchored, never stretched (the 8 Nov cyan rows)
+    r.bar = tex(r, "ARTWORK", "accent", 1)
+    r.bar:SetPoint("TOPLEFT") r.bar:SetPoint("BOTTOMLEFT") r.bar:SetWidth(3)
+    r.bar:SetAlpha(0)
+    r.lamp = tex(r, "OVERLAY", "line2", 1)
+    r.lamp:SetSize(8, 8)
+    r.lamp:SetPoint("LEFT", 10, 0)
+    r.name = fs(r, D.LABEL - 1, "ink", e.title or e.key)
+    r.name:SetPoint("LEFT", 26, 0)
+    r.state = fs(r, T.SETTINGS.BODY, "muted", "")
+    r.state:SetPoint("RIGHT", -8, 0)
+    r.entry = e
+    r:SetScript("OnClick", function(s, button)
+      if button == "RightButton" and s.entry.switch then d:Switch(s.entry, not d:On(s.entry)) else d:Select(s.entry.key) end
+    end)
+    r:SetScript("OnEnter", function(s) s.wash:SetAlpha(1) s.bar:SetAlpha(1) d.help:Say(s.entry.desc) end)
+    r:SetScript("OnLeave", function(s)
+      s.wash:SetAlpha(0) s.bar:SetAlpha(s.entry.key == d.selected and 1 or 0)
+      d.help:Idle()
+    end)
+    d.rows[i] = r
+  end
+  local p = T.DashPanel(body, "")
+  d.detail = p
+  p:SetPoint("TOPLEFT", d.list, "TOPRIGHT", D.GAP, 0)
+  p:SetPoint("BOTTOMRIGHT", d.help, "TOPRIGHT", 0, D.GAP)
+  p.name = fs(p, T.SETTINGS.TITLE + 2, "accent", "")
+  p.name:SetPoint("TOPLEFT", p, "TOPLEFT", 14, -12)
+  p.switch = T.DashSwitch(p, function() local e = d:Entry() if e and e.switch then d:Switch(e, not d:On(e)) end end)
+  p.switch:SetPoint("TOPRIGHT", p, "TOPRIGHT", -12, -12)
+  p.open = T.DashButton(p, "open its window", 130, function()
+    local e = d:Entry()
+    T.CloseSettingsPanel()
+    if e and e.open and e.open.func then pcall(e.open.func) end
+    d:Paint()
+  end)
+  p.open:SetPoint("TOPRIGHT", p.switch, "TOPLEFT", -8, 0)
+  p.desc = fs(p, D.LABEL - 1, "ink2", "")
+  if p.desc.SetWordWrap then p.desc:SetWordWrap(true) end
+  p.desc:SetPoint("TOPLEFT", p.name, "BOTTOMLEFT", 0, -8)
+  p.desc:SetPoint("RIGHT", p, "RIGHT", -14, 0)
+  p.usage = fs(p, T.SETTINGS.SMALL, "muted", "")
+  if p.usage.SetWordWrap then p.usage:SetWordWrap(true) end
+  p.usage:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 14, 10)
+  p.usage:SetPoint("RIGHT", p, "RIGHT", -14, 0)
+  p.none = fs(p, D.LABEL - 1, "muted", "Nothing to set here.")
+  d:Select(d.entries[1] and d.entries[1].key)
+  return d
+end
+
+function Dash:Entry(key)
+  key = key or self.selected
+  for _, e in ipairs(self.entries) do if e.key == key then return e end end
+end
+
+function Dash:On(e)
+  if not (e and e.switch and e.switch.get) then return nil end
+  local ok, v = pcall(e.switch.get)
+  return ok and v and true or false
+end
+
+function Dash:Changed(e, opt)
+  if self.model.onChange then pcall(self.model.onChange, e, opt) end
+  self:Paint()
+end
+
+function Dash:Switch(e, on)
+  if e.switch and e.switch.set then pcall(e.switch.set, on and true or false) end
+  self:Changed(e)
+end
+
+function Dash:Select(key)
+  self.selected = key
+  for k, rows in pairs(self.pages) do
+    if k ~= key then for _, r in ipairs(rows) do r:Hide() end end
+  end
+  self:Paint()
+end
+
+--- The settings rows of one section, built the first time it is picked.
+function Dash:Page(e)
+  if self.pages[e.key] then return self.pages[e.key] end
+  local ctx = { help = self.help, onChange = function(opt) self:Changed(e, opt) end }
+  local rows = {}
+  for i, opt in ipairs(e.options or {}) do rows[i] = T.DashControl(self.detail, opt, e.db, ctx) end
+  self.pages[e.key] = rows
+  return rows
+end
+
+--- ONE column under the words, full width; shorter rows when many (never two columns: they cut every label).
+function Dash:Layout(rows, top, bottom)
+  local D, p = T.SETTINGS.DASH, self.detail
+  local step = D.ROW + 4
+  local h = p.GetHeight and p:GetHeight() or 0
+  local avail = (type(h) == "number" and h or 0) + top - (bottom or 0) - 8
+  if avail > 0 and #rows * step > avail then step = math.max(D.MIN_STEP, math.floor(avail / #rows)) end
+  for i, r in ipairs(rows) do
+    r:ClearAllPoints()
+    r:SetPoint("TOPLEFT", p, "TOPLEFT", 14, top - (i - 1) * step)
+    r:SetPoint("RIGHT", p, "RIGHT", -14, 0)
+    r:SetHeight(step - 4)
+    r:Show()
+  end
+  self.step = step
+  return step
+end
+
+function Dash:Paint()
+  local on, all = 0, 0
+  for _, r in ipairs(self.rows) do
+    local e = r.entry
+    local en = self:On(e)
+    if e.switch then
+      all = all + 1
+      if en then on = on + 1 end
+      r.lamp:SetColorTexture(T.rgb(en and "good" or "line2"))
+      r.state:SetText(en and "ON" or "off")
+      r.state:SetTextColor(T.rgb(en and "good" or "muted"))
+      r.name:SetTextColor(T.rgb(en and "ink" or "ink2"))
+    else
+      r.lamp:SetColorTexture(T.rgb("accent"))
+      r.state:SetText("")
+    end
+    local picked = e.key == self.selected
+    r.bar:SetAlpha(picked and 1 or 0)
+    r.bg:SetColorTexture(T.rgb(picked and "line2" or "sunken"))
+  end
+  self.count:SetText(all > 0 and (on .. " of " .. all .. " on") or "")
+  local e = self:Entry()
+  if not e then return end
+  local p = self.detail
+  local en = self:On(e)
+  p.name:SetText(e.title or e.key)
+  p.desc:SetText(e.desc or "")
+  if e.switch then p.switch:Set(en) p.switch:Show() else p.switch:Hide() end
+  if e.open and e.open.func then
+    p.open.label:SetText(tostring(e.open.label or "open its window"))
+    p.open:Show()
+  else
+    p.open:Hide()
+  end
+  -- the rows start right under the words, however many lines they took (2 lines when the client will not say)
+  local okH, descH = pcall(function() return p.desc:GetStringHeight() end)
+  descH = (okH and type(descH) == "number" and descH > 0) and descH or 30
+  local top = -(12 + 24 + 8) - math.ceil(descH) - 12
+  local bottom = 0
+  if e.usage then
+    p.usage:SetText("command:  " .. e.usage)
+    p.usage:Show()
+    local okU, uh = pcall(function() return p.usage:GetStringHeight() end)
+    bottom = 10 + ((okU and type(uh) == "number" and uh > 0) and math.ceil(uh) or 26)
+  else
+    p.usage:Hide()
+  end
+  local rows = self:Page(e)
+  if #rows == 0 then
+    p.none:ClearAllPoints()
+    p.none:SetPoint("TOPLEFT", p, "TOPLEFT", 14, top - 4)
+    p.none:Show()
+  else
+    p.none:Hide()
+    self:Layout(rows, top, bottom)
+  end
+  for _, r in ipairs(rows) do
+    r:Paint()
+    r:SetDim(e.switch ~= nil and not en)
+  end
 end
 
 --- Put the game's options panel away (before a page's button opens the addon's own window over the screen).
