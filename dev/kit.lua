@@ -49,7 +49,14 @@ local FONT_SIZE = {
 H.FONT_SIZE = FONT_SIZE
 
 local function newTexture(owner)
-    local t = { _shown = true, _parent = owner, _isTexture = true }
+    local t = { _shown = true, _parent = owner, _isTexture = true, _alpha = 1 }
+    -- A TEXTURE KEEPS ITS ALPHA, STARTING AT 1 (7 Nov 2026, ported from BiS Memories' kit): the catch-all answered
+    -- SetAlpha with silence and GetAlpha with nil, so "does the options row light up under the mouse" was untestable.
+    function t:SetAlpha(a)
+        if not isnum(a) then error("SetAlpha needs a number", 0) end
+        self._alpha = a
+    end
+    function t:GetAlpha() return self._alpha end
     function t:SetAllPoints() self._all = true end
     -- size and anchor REMEMBERED: a label pinned beside an icon starts where the icon ends, and the
     -- fit check cannot know that if the icon forgot both

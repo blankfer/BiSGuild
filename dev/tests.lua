@@ -111,6 +111,17 @@ do
     local canon = bytes((os.getenv("BISTHEME") or (ROOT .. "/../BiSTheme")) .. "/Console.lua")
     if canon then H.ok(bytes(ROOT .. "/Libs/BiSTheme/Console.lua") == canon, "Console.lua byte-identical to canon")
     else H.say("  (note) no canon BiSTheme beside the checkout - bytes fence skipped") end
+    -- the options window's kit (Forever 1.0) and the one BiS> home: canon bytes too, Options right after Console
+    local at = {}
+    for i, f in ipairs(FILES) do at[f] = i end
+    H.ok(at["Libs/BiSTheme/Options.lua"] and at["Libs/BiSTheme/Options.lua"] == at["Libs/BiSTheme/Console.lua"] + 1,
+         "TOC lists the Options embed, right after Console")
+    H.ok(listed("Libs/BiSTheme/Settings.lua"), "TOC lists the Settings embed")
+    for _, name in ipairs({ "Options.lua", "Settings.lua" }) do
+        local c = bytes((os.getenv("BISTHEME") or (ROOT .. "/../BiSTheme")) .. "/" .. name)
+        if c then H.ok(bytes(ROOT .. "/Libs/BiSTheme/" .. name) == c, name .. " byte-identical to canon")
+        else H.say("  (note) no canon BiSTheme beside the checkout - " .. name .. " fence skipped") end
+    end
     local lib = bytes((os.getenv("BISDEV") or (ROOT .. "/../_bisdev")) .. "/LibBiSComm-1.0/LibBiSComm-1.0.lua")
     if lib then H.ok(bytes(ROOT .. "/Libs/LibBiSComm-1.0/LibBiSComm-1.0.lua") == lib, "LibBiSComm byte-identical to _bisdev")
     else H.say("  (note) no _bisdev beside the checkout - lib bytes fence skipped") end
@@ -3305,6 +3316,124 @@ do
     K.Hide()
     _G.GetNumGuildMembers, _G.GetGuildRosterInfo = realNum, realInfo
     X._ranksDirty = true
+end
+
+--=============================================================================
+-- FOREVER 1.0: ONE OPTIONS HOME (Arn, 7 Nov: "when they open the options, they go to add-ons ... they'll just see
+-- BiS> ... click into that add-on"). Every extra a new install starts with OFF has a switch here, and every switch
+-- runs the same function as its slash command. No minimap button - BiS Guild never had one.
+--=============================================================================
+H.section("Forever 1.0: the options window and the BiS> page")
+do
+    local O, T, L, M, C = NS.Opt, _G.BiSTheme, NS.Login, NS.Pins, NS.Copy
+    H.ok(T.OPTIONS_MINOR and T.OPTIONS_MINOR >= 4 and T.Options, "the shared options kit loaded")
+    local f = O.Build()
+    H.ok(f and f:GetName() == "BiSGuildOptions" and not f:IsShown(), "the window builds, named, and starts hidden")
+    H.eq(O.Build(), f, "built once")
+    local rowsBy = {}
+    for _, r in ipairs(f.rows) do if r.opt then rowsBy[r.opt.key] = r end end
+    -- every quiet-start extra has a visible switch, and the channel's two
+    for _, key in ipairs({ "logins", "mapDots", "versionNote", "comm", "commShare" }) do
+        H.ok(rowsBy[key] and rowsBy[key].opt.kind == "toggle", "a switch for " .. key)
+    end
+    for key in pairs(NS.QUIET) do H.ok(rowsBy[key] ~= nil, "quiet-start key " .. key .. " can be switched on in the window") end
+    H.ok(rowsBy.terminal and rowsBy.terminal.opt.kind == "button", "and a button to the terminal")
+    H.ok(math.abs(f:GetWidth() / f:GetHeight() - 1.43) < 0.02, "the family's 1.43:1",
+         ("%d x %d"):format(f:GetWidth(), f:GetHeight()))
+    -- every clickable row pops under the mouse (the standing rule): the kit hooks the row and its control
+    H.ok(rowsBy.logins.hoverable and rowsBy.logins.lit and rowsBy.logins.bar, "rows pop under the mouse (wash + bar)")
+    rowsBy.logins._scripts.hook_OnEnter(rowsBy.logins)
+    H.ok(rowsBy.logins.lit:GetAlpha() > 0 and rowsBy.logins.bar:GetAlpha() == 1, "and light up when hovered")
+    rowsBy.logins.ctl._scripts.OnEnter(rowsBy.logins.ctl)
+    H.ok(rowsBy.logins.ctl.wash:GetAlpha() > 0, "its box too")
+
+    -- a switch does what its slash command does (earlier sections switched dots and logins on, as a player would)
+    _G.SlashCmdList.BISGUILD("dots off")
+    _G.SlashCmdList.BISGUILD("logins off")
+    f:Paint()
+    H.ok(not rowsBy.mapDots.ctl.on and not rowsBy.logins.ctl.on and not rowsBy.versionNote.ctl.on,
+         "a new install: the three extras paint off")
+    lib.spots = { Bob = { map = 1411, x = 0.5, y = 0.4, at = H.clock } }
+    rowsBy.mapDots.ctl:Click()
+    H.ok(_G.BiSGuildDB.mapDots == true and M.On() and rowsBy.mapDots.ctl.on, "dots: on from the window, saved, painted")
+    rowsBy.mapDots.ctl:Click()
+    H.ok(_G.BiSGuildDB.mapDots == false and M.Update() == 0, "and off again: no dots")
+    L.waiting = { { name = "Kio Alpha", key = "kio alpha" } }
+    rowsBy.logins.ctl:Click()
+    H.ok(_G.BiSGuildDB.logins == true and L.On(), "logins: on from the window")
+    rowsBy.logins.ctl:Click()
+    H.ok(_G.BiSGuildDB.logins == false and #L.waiting == 0, "off: and whoever was waiting goes with the window")
+    rowsBy.versionNote.ctl:Click()
+    H.ok(_G.BiSGuildDB.versionNote == true and C.NoteOn(), "the newer-version note: on from the window")
+    _G.SlashCmdList.BISGUILD("note off")
+    H.ok(_G.BiSGuildDB.versionNote == false and not C.NoteOn(), "/bisg note off: the same switch")
+    f:Paint()
+    H.ok(not rowsBy.versionNote.ctl.on, "and the window shows it")
+    rowsBy.comm.ctl:Click()
+    H.ok(not lib:Enabled() and _G.BiSGuildDB.comm == false, "the BiS channel: off from the window, and saved at once")
+    rowsBy.comm.ctl:Click()
+    H.ok(lib:Enabled() and _G.BiSGuildDB.comm == true, "and on again")
+    local share = lib:Sharing()
+    rowsBy.commShare.ctl:Click()
+    H.ok(lib:Sharing() == not share and _G.BiSGuildDB.commShare == lib:Sharing(), "share my spot: flips, saved")
+    rowsBy.commShare.ctl:Click()
+    H.eq(lib:Sharing(), share, "and back")
+    rowsBy.terminal.ctl:Click()
+    H.ok(NS.K.frame and NS.K.frame:IsShown(), "the terminal button opens the terminal")
+    NS.K.Hide()
+
+    -- the BiS> page: the game's Settings panel stood in as Forever's does where it matters (BiSTheme/dev/tests.lua
+    -- section 10): a subcategory needs a REGISTERED parent, an unknown id opens nothing, categories answer GetID
+    H.eq(O.Register(), nil, "no game options panel: no page, no error")
+    local reg, opened, nextId = {}, {}, 0
+    local function Category(name)
+        nextId = nextId + 1
+        local c = { name = name, id = nextId }
+        function c:GetID() return self.id end
+        reg[c.id] = c
+        return c
+    end
+    _G.Settings = {
+        RegisterCanvasLayoutCategory = function(frame, name) local c = Category(name) c.frame = frame return c, {} end,
+        RegisterAddOnCategory = function(c) c.addon = true end,
+        RegisterCanvasLayoutSubcategory = function(parent, frame, name)
+            if not (parent and parent.addon) then error("parent category is not registered") end
+            local c = Category(name) c.frame, c.parentCat = frame, parent
+            return c, {}
+        end,
+        OpenToCategory = function(id) if not reg[id] then return false end opened[#opened + 1] = reg[id].name return true end,
+    }
+    fire("PLAYER_LOGIN")
+    local page = T.settingsPages.BiSGuild
+    H.ok(page and page.category and page.category.name == "BiS> Guild" and page.category.parentCat.name == "BiS>",
+         "at login: BiS> Guild, under the one BiS> entry")
+    local spec = page and page.spec or {}
+    H.eq(spec.status and spec.status(), "logins off  -  dots off  -  note off", "the front page says what is on")
+    H.ok(spec.api and spec.api.name == "BiSGuildAPI" and _G.BiSGuildAPI ~= nil, "and names the API table, which exists")
+    H.ok(spec.open and spec.open.label == "the terminal", "the page's big button: the terminal")
+    spec.open.func()
+    H.ok(NS.K.frame:IsShown(), "which opens it")
+    NS.K.Hide()
+    H.eq(spec.window(), f, "the page holds this options window")
+    T.ShowSettingsPage("BiSGuild")
+    H.ok(page.inside and f:IsShown(), "shown inside the page")
+    T.HideSettingsPage("BiSGuild")
+    H.ok(not page.inside and not f:IsShown(), "and handed back, hidden, when the page closes")
+    _G.SlashCmdList.BISGUILD("options")
+    H.eq(opened[#opened], "BiS> Guild", "/bisg options opens the BiS> page")
+    H.ok(T.OpenSettings("BiSGuild") and opened[#opened] == "BiS> Guild", "(the family's OpenSettings reaches it too)")
+    _G.Settings = nil
+    T.settingsPages.BiSGuild.category = nil
+    _G.SlashCmdList.BISGUILD("options")
+    H.ok(f:IsShown(), "without the game's panel /bisg options opens the window itself")
+    f:Hide()
+    T.settingsRoot, T.settingsPages, T.settingsOrder = nil, {}, {}
+
+    -- NO MINIMAP BUTTON (BiS Guild never had one; /bisg and the BiS> page are the doors)
+    H.ok(not listed("Libs/BiSTheme/Minimap.lua") and T.Minimap == nil, "no minimap button: the kit is not even loaded")
+    -- and still no fingerprint of BiS Guild's own (dropped 18 Oct): the kit's help strip may name the build at rest
+    H.ok(NS.BUILD == nil and bytes(ROOT .. "/Core/Build.lua") == nil, "BiS Guild carries no build fingerprint of its own")
+    _G.SlashCmdList.BISGUILD("help")
 end
 
 H.report()
