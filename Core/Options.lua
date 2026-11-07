@@ -173,13 +173,9 @@ function O.Register()
     return O.page
 end
 
---- `/bisg options`: the BiS> page when the game has its options panel, else the window on its own.
+--- `/bisg options`: the options window on its own, as it always opened (Arn, 7 Nov live: "i liked these old option
+--- windows that opened without opening the game option window"). The BiS> page is Esc > Options > AddOns.
 function O.Open()
-    local T = _G.BiSTheme
-    if T and T.OpenSettings and T.settingsPages and T.settingsPages[ADDON] and T.settingsPages[ADDON].category
-        and T.OpenSettings(ADDON) then
-        return "page"
-    end
     local f = O.Build()
     if f then f:Toggle(true) f:Paint() end
     return f and "window" or nil

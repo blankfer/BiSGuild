@@ -3429,13 +3429,15 @@ do
     f:Hide()
     T.HideSettingsPage("BiSGuild")
     H.ok(not f:IsShown() and f:GetParent() == parentBefore, "leaving the page gives nothing back - nothing was taken")
+    local before = #opened
     _G.SlashCmdList.BISGUILD("options")
-    H.eq(opened[#opened], "BiS> Guild", "/bisg options opens the BiS> page")
-    H.ok(T.OpenSettings("BiSGuild") and opened[#opened] == "BiS> Guild", "(the family's OpenSettings reaches it too)")
+    H.ok(f:IsShown() and #opened == before, "/bisg options opens the options window itself, not the game's options")
+    f:Hide()
+    H.ok(T.OpenSettings("BiSGuild") and opened[#opened] == "BiS> Guild", "(the family's OpenSettings still reaches the page)")
     _G.Settings = nil
     T.settingsPages.BiSGuild.category = nil
     _G.SlashCmdList.BISGUILD("options")
-    H.ok(f:IsShown(), "without the game's panel /bisg options opens the window itself")
+    H.ok(f:IsShown(), "without the game's panel too")
     f:Hide()
     T.settingsRoot, T.settingsPages, T.settingsOrder = nil, {}, {}
 

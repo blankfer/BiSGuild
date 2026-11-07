@@ -50,7 +50,7 @@ Read ../_bisdev/CLAUDE.md first.
   Never twice. No per-character mirror here, so a lost save reads as new (quiet).
 - `Core/Options.lua` (`ns.Opt`): the options window (BiSTheme's kit, `BiSGuildOptions`) and the BiS> Guild page
   (`O.Register` at PLAYER_LOGIN, `status()` = "logins - dots - note"). Every switch and its slash command share one
-  setter (`O.SetLogins/SetDots/SetNote/SetComm/SetShare`). `/bisg options` opens the page, else the window.
+  setter (`O.SetLogins/SetDots/SetNote/SetComm/SetShare`). `/bisg options` opens the options WINDOW (8 Nov, like the family's right-click); the page is Esc > Options > AddOns.
   Since Settings minor 2 (8 Nov) the page never takes the options window in (Arn: "dont just shrink remake them
   all"): it shows the status line and a button "the options window", which closes the game's options and shows the
   window as it always was. A dashboard (`build`) comes later. **No minimap button** - never had one, so no
