@@ -2091,6 +2091,32 @@ do
     H.eq(K.page, "raiders", "and the right-click does not open the card")
     kioRow:Click("LeftButton")
     H.eq(K.key, "Kio", "a left-click still does")
+
+    -- INSIDE AN INSTANCE THE GAME'S MENU BREAKS (7 Nov sweep): opened from our code it measures frames whose
+    -- rects are secret there (FrameUtil), and the game's own menu stops working. So only where IsInInstance()
+    -- reads a plain false; anywhere else (true, secret, or the call failing) one line says why, and nothing opens.
+    -- The client answers IsInInstance with a SECRET boolean in places - the mock does too.
+    local keepII, keepSV, keepFF = _G.IsInInstance, rawget(_G, "issecretvalue"), rawget(_G, "FriendsFrame_ShowDropdown")
+    local SECRET = setmetatable({}, { __eq = function() error("attempt to compare a secret boolean value", 2) end })
+    _G.issecretvalue = function(v) return rawequal(v, SECRET) end
+    local ffOpened
+    _G.FriendsFrame_ShowDropdown = function() ffOpened = true end
+    for _, case in ipairs({ { "in a dungeon", function() return true, "party" end },
+                            { "a secret answer", function() return SECRET, "party" end },
+                            { "the call failing", function() error("no") end } }) do
+        menu, ffOpened = nil, nil
+        _G.IsInInstance = case[2]
+        local before = #said
+        kioRow:Click("RightButton")
+        H.ok(menu == nil and ffOpened == nil, case[1] .. ": the game's player menu is NOT opened")
+        local line = table.concat(said, "\n", before + 1, #said)
+        H.ok(#said == before + 1 and line:find("instance", 1, true), case[1] .. ": one line says why", line)
+    end
+    _G.IsInInstance = function() return false, "none" end
+    menu = nil
+    kioRow:Click("RightButton")
+    H.ok(menu and menu.name == "Kio Alpha", "out in the world (a plain false): the menu opens as before")
+    _G.IsInInstance, _G.issecretvalue, _G.FriendsFrame_ShowDropdown = keepII, keepSV, keepFF
     _G.UnitPopup_OpenMenu = nil
     NS.Books().record.nights["2026-10-09"].raiders.Kio = nil
 
