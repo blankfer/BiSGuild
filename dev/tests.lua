@@ -136,6 +136,60 @@ fire("PLAYER_LOGOUT")
 H.eq(_G.BiSGuildDB.comm, true, "on is saved")
 
 --=============================================================================
+-- FOREVER 1.0: A NEW INSTALL STARTS QUIET, AN EXISTING ONE KEEPS WHAT IT HAD (Arn, 7 Nov: "every new user ...
+-- every module turned off ... BUT all the main functionalities start on" and "everybody that already has the
+-- addons installed, I don't wanna change default settings that they have on"). The terminal and the record are
+-- the core and have no switch. The extras were read as `x ~= false` - nil meant ON - so an existing save must be
+-- FROZEN at what it showed before the stamp is written, or flipping the default would silently switch it off.
+--=============================================================================
+H.section("Forever 1.0: quiet for a new install, frozen for an existing one")
+do
+    local keep = _G.BiSGuildDB
+    local L, M, C = NS.Login, NS.Pins, NS.Copy
+    -- (a) the suite's own first load above was a fresh install: no saved table before ADDON_LOADED
+    H.ok(keep.forever10 == true, "the first load stamped the save")
+    H.ok(keep.logins == false and keep.mapDots == false and keep.versionNote == false,
+         "a NEW install: login pop-up, map dots and the newer-version note all start OFF")
+    H.ok(not L.On() and not M.On(), "and the modules read them as off")
+    H.ok(keep.comm == true, "the shared channel stays on (it is how the record is shared - core)")
+
+    -- a table made by our own db() BEFORE the client handed the saved variables in is still a new install
+    -- (the client keeps the global we made when there is no saved file)
+    _G.BiSGuildDB = nil
+    NS.DB()
+    NS.Settle()
+    H.ok(_G.BiSGuildDB.forever10 and _G.BiSGuildDB.logins == false, "our own early table is not mistaken for a save")
+
+    -- (b) an EXISTING save from 0.5.x: the extras never written (nil = on), a few things set
+    _G.BiSGuildDB = { comm = true, logs = "C:\\WoW\\Logs", guilds = { ["R|G"] = { roster = "x" } } }
+    NS.Settle()
+    local d = _G.BiSGuildDB
+    H.ok(d.forever10 == true, "an existing save is stamped")
+    H.ok(d.logins == true and d.mapDots == true and d.versionNote == true,
+         "and FROZEN: every nil-read extra written as the on it was showing", tostring(d.logins) .. tostring(d.mapDots))
+    H.ok(L.On() and M.On(), "so the login pop-up and the map dots are still on for them")
+    H.eq(d.logs, "C:\\WoW\\Logs", "nothing else touched")
+
+    -- an existing save that had switched one OFF keeps it off
+    _G.BiSGuildDB = { comm = false, logins = false }
+    NS.Settle()
+    H.ok(_G.BiSGuildDB.logins == false and _G.BiSGuildDB.mapDots == true and _G.BiSGuildDB.comm == false,
+         "an existing 'off' stays off; the others freeze on")
+
+    -- (c) the second load changes nothing, in either direction
+    _G.BiSGuildDB.mapDots = false            -- the player switches dots off after the 1.0 load
+    _G.BiSGuildDB.logins = nil               -- and something leaves a key unwritten
+    NS.Settle()
+    H.ok(_G.BiSGuildDB.mapDots == false and _G.BiSGuildDB.logins == nil, "a second load never runs the freeze again")
+    local fresh = { forever10 = true, logins = false, mapDots = false, versionNote = false }
+    _G.BiSGuildDB = fresh
+    _G.BiSGuildDB.versionNote = true         -- a new player switched the note on
+    NS.Settle()
+    H.ok(_G.BiSGuildDB.versionNote == true and _G.BiSGuildDB.logins == false, "nor the quiet start")
+    _G.BiSGuildDB = keep
+end
+
+--=============================================================================
 --=============================================================================
 -- The collector is gone (5 Oct 2026). Arn: "we can get rid of the attendence and consume check
 -- lets do logs for that". The addon counted boss kills and who was standing there, which was a
@@ -2260,6 +2314,12 @@ do
         .. '],"displayTitle":"Raid night","time":"20:00","startTime":' .. start .. '}'
     local function online(name) fire("CHAT_MSG_SYSTEM", ("|Hplayer:%s-Realm|h[%s]|h has come online."):format(name, name)) end
 
+    -- a new install starts with the pop-up off (Forever 1.0): a roster and raid time arm nothing
+    H.ok(_G.BiSGuildDB.logins == false and not L.Armed(), "a new install: the login pop-up starts off, never armed")
+    online("Kio Alpha")
+    H.eq(#L.waiting, 0, "and a login on the roster pops nothing up")
+    L.told = {}
+    _G.SlashCmdList.BISGUILD("logins on")
     H.ok(L.Armed(), "a roster pasted, raid in an hour, on my own: armed")
     online("Kio Alpha")
     H.eq(#L.waiting, 1, "Kio logs in: on the roster, so he waits for an invite")
@@ -2431,6 +2491,11 @@ do
     _G.GetGuildRosterInfo = function(i) local r = ROSTER[i] if r then return r[1], r[2], 0, 30, r[3], "Durotar", "", "", true, 0, r[3] end end
     _G.RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 } }
     NS.K._guildDirty = true
+    lib.spots = {}
+    -- a new install starts with the dots off (Forever 1.0): nothing is drawn until the player switches them on
+    lib.spots.Bob = { map = 1411, x = 0.5, y = 0.4, at = H.clock }
+    H.ok(_G.BiSGuildDB.mapDots == false and M.Update() == 0, "a new install: the dots start off, nothing drawn")
+    _G.SlashCmdList.BISGUILD("dots on")
     lib.spots = {}
     H.eq(M.Update(), 0, "nobody sharing: no dots")
 
@@ -2732,7 +2797,15 @@ do
     C.Hear("Bea", "0.0.0", OLDFP, ".x")
     H.eq(C.Summary().newer, 0, "the same version and an older one: nothing newer")
     H.ok(not C.toldOld, "so nothing said")
+    -- THE NOTE HAS A SWITCH NOW, OFF FOR A NEW INSTALL (Forever 1.0): the shared lib's /biscomm ver lists the
+    -- versions and speaks up only for a critical one, so a chat line on every newer copy is a nag for a new player
     local before = #said
+    H.eq(_G.BiSGuildDB.versionNote, false, "a new install: the newer-version note starts off")
+    C.Hear("Eve", "9.0.0", "-", ".")
+    H.eq(#said, before, "a newer copy heard: written down, nothing said in chat")
+    H.eq(C.Summary().newer, 1, "but the book still knows")
+    _G.BiSGuildDB.versionNote = true                     -- an existing save, frozen on (or the switch turned on)
+    before = #said
     C.Hear("Eve", "9.0.0", "-", ".")
     local told = table.concat(said, "\n", before + 1)
     H.ok(told:find("1 guildmate(s) run BiS Guild 9.0.0", 1, true) and told:find("CurseForge", 1, true),
@@ -2779,6 +2852,7 @@ do
 
     NS.Books().copies = nil
     C.toldOld, C.waiting, C.lastSent = nil, nil, nil
+    _G.BiSGuildDB.versionNote = false
     _G.GetNumGuildMembers, _G.GetGuildRosterInfo = realNum, realInfo
     X._ranksDirty = true
     drain()

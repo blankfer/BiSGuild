@@ -40,13 +40,49 @@ end
 
 ns.DEFAULTS = { comm = true }
 local function db()
-  BiSGuildDB = type(BiSGuildDB) == "table" and BiSGuildDB or {}
+  if type(BiSGuildDB) ~= "table" then
+    BiSGuildDB = {}
+    ns.madeHere = BiSGuildDB          -- ours, not the client's: a table made before the saved variables came in
+  end
   for k, v in pairs(ns.DEFAULTS) do
     if BiSGuildDB[k] == nil then BiSGuildDB[k] = v end
   end
   return BiSGuildDB
 end
 ns.DB = db
+
+--- FOREVER 1.0: A NEW INSTALL STARTS QUIET (Arn, 7 Nov 2026: "every new user that we get will have every module
+--- turned off ... anything that would make a new user go like okay, this add-on is just making random noises and
+--- putting random stuff on my screen" - "all the main functionalities start on"). The core - the terminal, the
+--- record, its sharing - has no switch. The extras below start OFF for a new install.
+---
+--- AND AN EXISTING ONE KEEPS WHAT IT HAD ("everybody that already has the addons installed, I don't wanna change
+--- default settings that they have on"). logins and mapDots were read `~= false`, so nil meant ON; the newer-version
+--- note had no switch and always spoke. On the first 1.0 load of an existing save each is written as the value it was
+--- showing, then the stamp. Either way, once: `forever10` is never cleared.
+ns.QUIET = { logins = false, mapDots = false, versionNote = false }
+function ns.Forever10(d, isNew)
+  if type(d) ~= "table" or d.forever10 then return false end
+  if isNew then
+    for k, v in pairs(ns.QUIET) do d[k] = v end
+  else
+    d.logins = d.logins ~= false
+    d.mapDots = d.mapDots ~= false
+    if d.versionNote == nil then d.versionNote = true end
+  end
+  d.forever10 = true
+  return true
+end
+
+--- The saved variables are in (ADDON_LOADED): new or existing is decided HERE, before the defaults are merged -
+--- no table, or only the one our own db() made, is a new install. (BiS Guild keeps no per-character mirror, so a
+--- client that once handed back no saved variables would read as new and start quiet - the safer side.)
+function ns.Settle()
+  local isNew = type(BiSGuildDB) ~= "table" or rawequal(BiSGuildDB, ns.madeHere)
+  local d = db()
+  ns.Forever10(d, isNew)
+  return d, isNew
+end
 
 --- EACH GUILD ITS OWN BOOKS (Arn, 16 Oct: "some people have alts in other guilds - when I opened it on
 --- my hunter it still had the pasted JSON"). BiSGuildDB is the account's, every character shares it,
@@ -147,7 +183,7 @@ f:RegisterEvent("PLAYER_GUILD_UPDATE")
 f:RegisterEvent("GUILD_ROSTER_UPDATE")
 f:SetScript("OnEvent", function(_, event, name)
   if event == "ADDON_LOADED" and name == ADDON then
-    db()
+    ns.Settle()
     ns.loaded = true                 -- the saved variables are in: the APIs may answer (API.lua, Loot.lua)
     ns.Comm.Boot()
     -- THE ADDON WATCHES NOTHING NOW (5 Oct 2026). Arn: "we can get rid of the attendence and
