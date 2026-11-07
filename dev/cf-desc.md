@@ -2,6 +2,13 @@
 
 Paste everything below the line into the project description, in the Markdown editor.
 
+Changed since the previous text (8 Nov, 1.0.0 - Forever 1.0): "Starts quiet" keeps only the quiet
+start (existing players keep their switches); a new "Settings" section says the BiS> Guild page in
+the game's options is a full-page dashboard (sections down the left: the terminal, login pop-up, map
+dots, the BiS channel with share-my-spot, version note; settings big on the right), that
+`/bisg options` opens the same switches in their own window, and that there is no minimap button -
+`/bisg` and the BiS> page are the doors. The notebook link is unchanged.
+
 **NO FINGERPRINT SINCE 18 OCT 2026** (Arn: "can we get rid of the fingerprint thing and just do a
 secret powershell feature just for us"). Raiders read their logs in the notebook; the PowerShell
 script is the officers' own and is not on this page. **The notebook link below is the check** (Arn:
@@ -70,7 +77,11 @@ A 110 MB log takes seconds. `/biscomm ver` shows which BiS versions your guild r
 
 ## Starts quiet
 
-A new install starts with only its main job on: the terminal and the record. The login pop-up, guildmates' dots on the world map and the newer-version note wait for you to switch them on - in **Esc > Options > AddOns > BiS> > BiS> Guild**, or `/bisg options`. Already using BiS Guild? Everything stays as you had it.
+A new install starts with only its main job on: the terminal and the record. The login pop-up, guildmates' dots on the world map and the newer-version note wait for you to switch them on. Already using BiS Guild? Everything stays as you had it.
+
+## Settings
+
+Every switch lives in **Esc > Options > AddOns > BiS> > BiS> Guild**: a full page with its sections down the left - the terminal, the login pop-up, map dots, the BiS channel (and sharing your spot), the version note - and each one's settings big and readable on the right. `/bisg options` opens the same switches in a window of their own. There's no minimap button: `/bisg` and that page are the way in.
 
 ## Works with
 
