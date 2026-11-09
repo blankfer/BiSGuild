@@ -1,5 +1,18 @@
 # BiSGuild
 
+## Unreleased
+
+- **Guildmates on the world map are radar tracks now.** The little squares are gone. Each guildmate is drawn like a fighter jet's radar screen shows a friendly:
+  - a half-circle in their class colour;
+  - a line showing which way they're heading, longer the faster they go (none when standing still);
+  - their callsign beside it, like "FRANK 26", on their own zone's map only, so the continent map stays clean.
+  - **Hover to lock on:** green brackets close in, and a card shows their whole name, class, level, heading and speed, where they are, and how many seconds old that is. Click opens their card in the terminal, as before.
+  - **Old spots fade:** someone you haven't heard from in a while goes grey and hollow, with the age on the tag.
+  - **Groups merge:** several guildmates in one spot become one box with a count. Hover it for the names.
+- **Next to OpenMap.** OpenMap now draws your guild too. BiS Guild's tracks stay on, and the first login with OpenMap says once which switch is whose. Our switch is now in OpenMap's own menu as well ("BiS Guild radar tracks").
+- **A track says where it really is.** It used to show the guild roster's zone, which can lag behind (a dot in Tirisfal said "Durotar").
+- For other addons: `BiSGuildAPI.MapDots()` (version 3) says whether our tracks are on the map.
+
 ## 1.0.0 - Forever 1.0
 
 - **A new install starts quiet.** Only the main job is on: the raider terminal (`/bisg`) and the raid record. The "X just logged in - invite?" pop-up, guildmates' dots on the world map and the "a guildmate runs a newer version" line in chat start off, until you switch them on. **Already using BiS Guild? Nothing changes for you** - every switch stays as you had it.

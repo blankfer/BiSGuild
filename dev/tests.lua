@@ -2,6 +2,31 @@
 --   lua5.1 dev/tests.lua        or, from the AddOns folder: _bisdev/check.sh BiSGuild
 local HERE = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
 local H = dofile(HERE .. "/kit.lua")   -- Nebbinator's strict harness (dev/harness.lua), verbatim
+-- A LINE, as the client draws one (8 Nov 2026, the radar tracks; the kit stays verbatim, so it is added here): a texture
+-- with two ends and a thickness, strict about its arguments as BiS Tools' mock is. Every frame the kit makes gets it.
+do
+    local kitCreate = _G.CreateFrame
+    _G.CreateFrame = function(...)
+        local fr = kitCreate(...)
+        if fr and not rawget(fr, "CreateLine") then   -- the kit answers ANY unknown method with a quiet nil
+            function fr:CreateLine(_, layer)
+                local l = self:CreateTexture(nil, layer)
+                l._isLine = true
+                function l:SetThickness(w) if type(w) ~= "number" then error("SetThickness wants a number", 2) end self._thick = w end
+                function l:SetStartPoint(p, rel, x, y)
+                    if type(p) ~= "string" or type(x) ~= "number" or type(y) ~= "number" then error("SetStartPoint(point, rel, x, y)", 2) end
+                    self._from = { x, y }
+                end
+                function l:SetEndPoint(p, rel, x, y)
+                    if type(p) ~= "string" or type(x) ~= "number" or type(y) ~= "number" then error("SetEndPoint(point, rel, x, y)", 2) end
+                    self._to = { x, y }
+                end
+                return l
+            end
+        end
+        return fr
+    end
+end
 local ROOT = os.getenv("BISGUILD") or (HERE .. "/..")
 local FILES = H.TOC(ROOT, "BiSGuild.toc")
 
@@ -46,6 +71,11 @@ local function fakeHBDPins()
     function P:RemoveAllWorldMapIcons() PINS.world = {} end
     function P:RemoveAllMinimapIcons() PINS.minimap = {} end
     _G.HBD_PINS_WORLDMAP_SHOW_PARENT, _G.HBD_PINS_WORLDMAP_SHOW_CONTINENT, _G.HBD_PINS_WORLDMAP_SHOW_WORLD = 1, 2, 3
+    -- the core library's zone sizes in yards (the radar tracks' speed): two maps known, any other unknown (nil)
+    local core = LibStub:NewLibrary("HereBeDragons-2.0", 999)
+    if core then
+        function core:GetZoneSize(map) if map == 1411 then return 5000, 3333 elseif map == 1454 then return 1700, 1100 end end
+    end
 end
 local function Load()
     local before = {}
@@ -2492,7 +2522,7 @@ do
     local M = NS.Pins
     local function pins()
         local out = {}
-        for icon, p in pairs(PINS.world) do out[#out + 1] = { who = icon.who, map = p.map, x = p.x, flag = p.flag, icon = icon } end
+        for icon, p in pairs(PINS.world) do out[#out + 1] = { who = icon.who or "#box", map = p.map, x = p.x, flag = p.flag, icon = icon } end
         table.sort(out, function(a, b) return a.who < b.who end)
         return out
     end
@@ -2532,24 +2562,140 @@ do
     H.ok(#p == 1 and p[1].who == "Cara", "Bob gone from the map")
     H.eq(#M.pool, 1, "his pin frame kept for the next one")
 
-    -- the tooltip and the click
+    -- RADAR TRACKS (Arn 8 Nov: "think combat jet fighter" ... "Build it"): Cara's track - the friendly half-circle and
+    -- its base, her callsign, no speed line yet (one spot only)
+    local c = p[1].icon
+    local arcShown = 0
+    for _, l in ipairs(c.arc) do if l._isLine and l:IsShown() and l._from and l._to then arcShown = arcShown + 1 end end
+    H.ok(arcShown == M.ARC_SEG and c.base:IsShown() and not c.vec:IsShown(), "a track: the half-circle and its base, no speed line yet")
+    H.eq(c.tag:GetText(), "CARA 30", "her callsign: first name and level")
+    H.ok(not c.box[1]:IsShown(), "not a box")
+
+    -- the card under the mouse: LOCK, class and level, where, how old; four brackets close in
     local lines = {}
     _G.GameTooltip = { SetOwner = function() end, Show = function() end, Hide = function() end,
                        AddLine = function(_, s) lines[#lines + 1] = s end }
-    p[1].icon:Fire("OnEnter")
-    H.eq(lines[1], "Cara", "hovering a dot names them")
-    H.ok(lines[3] == "Durotar", "with the zone the roster gives", table.concat(lines, " | "))
+    c:Fire("OnEnter")
+    H.eq(lines[1], "LOCK  CARA", "hovering a track locks on")
+    H.ok(lines[2]:find("MAGE  LVL 30", 1, true), "class and level", lines[2])
+    H.ok(lines[3]:find("Durotar  30,60", 1, true) and lines[3]:find("0s ago", 1, true),
+         "where and how old (the roster's zone when the map has no name)", lines[3])
+    local locked = 0
+    for _, t in ipairs(c.lock) do if t:IsShown() then locked = locked + 1 end end
+    H.eq(locked, 8, "the lock-on brackets close in")
+    c:Fire("OnLeave")
+    locked = 0
+    for _, t in ipairs(c.lock) do if t:IsShown() then locked = locked + 1 end end
+    H.eq(locked, 0, "and open again")
     _G.GameTooltip = nil
-    p[1].icon:Click()
-    H.ok(NS.K.frame:IsShown() and NS.K.key == "Cara", "clicking a dot opens their card in the terminal")
+    c:Click()
+    H.ok(NS.K.frame:IsShown() and NS.K.key == "Cara", "clicking a track opens their card in the terminal")
     NS.K.Hide()
 
     -- /bisg dots off takes them all away; on brings them back
     _G.SlashCmdList.BISGUILD("dots off")
-    H.eq(#pins(), 0, "/bisg dots off: no dots")
+    H.eq(#pins(), 0, "/bisg dots off: no tracks")
     H.eq(_G.BiSGuildDB.mapDots, false, "and it is remembered")
     _G.SlashCmdList.BISGUILD("dots on")
     H.eq(#pins(), 1, "/bisg dots on: back")
+
+    -- the card says where the track STANDS (Arn 8 Nov: a dot in Tirisfal said "Durotar" - the roster lags)
+    local keepMap = _G.C_Map
+    _G.C_Map = setmetatable({ GetMapInfo = function(m) return m == 1454 and { name = "Orgrimmar" } or nil end },
+                            { __index = keepMap })
+    lines = {}
+    _G.GameTooltip = { SetOwner = function() end, Show = function() end, Hide = function() end,
+                       AddLine = function(_, s2) lines[#lines + 1] = s2 end }
+    pins()[1].icon:Fire("OnEnter")
+    H.ok(lines[3]:find("^Orgrimmar"), "the zone of the track's own map, not the roster's", table.concat(lines, " | "))
+    pins()[1].icon:Fire("OnLeave")
+    _G.GameTooltip, _G.C_Map = nil, keepMap
+
+    -- THE SPEED LINE: her next spot 20 s later, 0.1 of Orgrimmar (1700 yd) east - 8.5 yd/s: on foot, heading east
+    lib.spots.Cara = { map = 1454, x = 0.4, y = 0.6, at = H.clock + 20 }
+    M.Update()
+    c = pins()[1].icon
+    local mo = M.motion.Cara
+    H.ok(mo and mo.speed and math.abs(mo.speed - 8.5) < 0.01 and M.Compass(mo.hdg) == "E" and M.SpeedOf(mo.speed) == "ON FOOT",
+         "her speed and heading from two spots: on foot, east", mo and mo.speed)
+    H.ok(c.vec:IsShown() and c.vec._to[1] > 0 and math.abs(c.vec._to[2] - c.vec._from[2]) < 0.01,
+         "the speed line points east (right)", c.vec._to and table.concat(c.vec._to, ","))
+    lib.spots.Cara = { map = 1454, x = 0.4, y = 0.2, at = H.clock + 40 }       -- 440 yd north in 20 s: 22 yd/s
+    M.Update()
+    c = pins()[1].icon
+    H.ok(M.Compass(M.motion.Cara.hdg) == "N" and M.SpeedOf(M.motion.Cara.speed) == "VERY FAST" and c.vec._to[2] > c.vec._from[2],
+         "a flight north: a long line up", M.motion.Cara.speed)
+    lines = {}
+    _G.GameTooltip = { SetOwner = function() end, Show = function() end, Hide = function() end,
+                       AddLine = function(_, s3) lines[#lines + 1] = s3 end }
+    c:Fire("OnEnter")
+    H.eq(lines[3], "HDG N  VERY FAST", "the card: heading and speed")
+    c:Fire("OnLeave")
+    _G.GameTooltip = nil
+
+    -- OLD SPOTS FADE: no news for more than M.STALE - hollow grey, the age on the tag, no speed line
+    local keepClock = H.clock
+    H.clock = H.clock + 40 + M.STALE + 5
+    M.Update()
+    c = pins()[1].icon
+    H.ok(c.stale and not c.vec:IsShown() and c.tag:GetText():find("%d+s$"), "a stale track: grey, its age on the tag", c.tag:GetText())
+    H.clock = keepClock
+    lib.spots.Cara = { map = 1454, x = 0.3, y = 0.6, at = H.clock }
+    M.motion.Cara = nil
+
+    -- the callsign only on the track's own zone map, not one level up
+    _G.WorldMapFrame = { GetMapID = function() return 1411 end }
+    M.Update()
+    c = pins()[1].icon
+    H.ok(not c.tag:IsShown(), "the continent's map (not hers): no callsign")
+    _G.WorldMapFrame = { GetMapID = function() return 1454 end }
+    c:Fire("OnShow")
+    H.ok(c.tag:IsShown(), "her own zone's map: the callsign")
+    _G.WorldMapFrame = nil
+
+    -- GROUPS MERGE: three in one spot of Orgrimmar are one box with a count; hover for the names
+    lib.spots.Dee = { map = 1454, x = 0.305, y = 0.605, at = H.clock }
+    lib.spots.Eve = { map = 1454, x = 0.31, y = 0.59, at = H.clock }
+    H.eq(M.Update(), 1, "three close together: one mark")
+    local box = pins()[1].icon
+    H.ok(box.members and #box.members == 3 and box.count:GetText() == "3" and box.box[1]:IsShown() and not box.base:IsShown(),
+         "a box with 3 in it, no track symbol")
+    lines = {}
+    _G.GameTooltip = { SetOwner = function() end, Show = function() end, Hide = function() end,
+                       AddLine = function(_, s4) lines[#lines + 1] = s4 end }
+    box:Fire("OnEnter")
+    H.ok(lines[1] == "3 GUILDMATES HERE" and lines[2] == "Cara" and lines[4] == "Eve", "hover: who is in it", table.concat(lines, " | "))
+    box:Fire("OnLeave")
+    _G.GameTooltip = nil
+    box:Click()
+    H.ok(NS.K.frame:IsShown(), "click: the terminal (its WHERE page)")
+    NS.K.Hide()
+    lib.spots.Dee, lib.spots.Eve = nil, nil
+    H.eq(M.Update(), 1, "they part: Cara alone, a track again")
+    H.ok(pins()[1].icon.base:IsShown(), "her symbol back")
+
+    -- OPENMAP DRAWS THE GUILD TOO (Arn 8 Nov: "open maps does the same thing now" ... "make them better"): the tracks
+    -- STAY ON; one line at the first login says whose switch is which; our switch sits in OpenMap's menu
+    local toggles, said = {}, {}
+    local keepPrint = NS.Print
+    NS.Print = function(fmt, ...) said[#said + 1] = fmt:format(...) end
+    _G.OpenMapAPI = { RegisterMenuToggle = function(owner, spec) toggles[#toggles + 1] = { owner = owner, spec = spec } end }
+    _G.BiSGuildDB.toldOpenMap = nil
+    fire("PLAYER_LOGIN")
+    H.ok(M.On() and #pins() == 1, "OpenMap here: our tracks stay on")
+    H.ok(#said == 1 and said[1]:find("OpenMap", 1, true) and said[1]:find("/bisg dots off", 1, true),
+         "said once: whose switch is which", said[1])
+    H.ok(#toggles == 1 and toggles[1].spec.id == M.TOGGLE_ID and toggles[1].spec.label == "BiS Guild radar tracks"
+         and toggles[1].spec.get() == true, "our switch in OpenMap's menu, showing on")
+    H.ok(BiSGuildAPI.MapDots() == true, "BiSGuildAPI.MapDots: on")
+    fire("PLAYER_LOGIN")
+    H.ok(#said == 1 and #toggles == 1, "the next login: not said again, not registered twice")
+    toggles[1].spec.set(false)
+    local ok3, why3 = BiSGuildAPI.MapDots()
+    H.ok(not M.On() and #pins() == 0 and ok3 == false and why3 == "off", "OpenMap's switch off: ours gone, the API says off")
+    toggles[1].spec.set(true)
+    H.ok(M.On() and #pins() == 1, "and on again")
+    _G.OpenMapAPI, NS.Print = nil, keepPrint
 
     -- NOT YOUR GROUP (Arn, 22 Oct: "both of these blue marks are frank how about they only show up if we are not
     -- in a party or raid"): Cara joins your raid - the game draws her, so her dot goes; she leaves, it comes back
@@ -2620,7 +2766,7 @@ do
     H.ok(n and n.raiders.Bob.deaths == 2 and n.bosses["Boss One"].best == 250000, "Night(date): the whole night")
     H.eq(select(2, A.Night("1999-01-01")), "no such night", "an unknown night: nil and why")
     -- v2: a key as people read it (dev/NIGHTS.md)
-    H.eq(A.version, 2, "the API's version went up with raids as nights")
+    H.ok(A.version >= 2, "the API's version went up with raids as nights (3 since MapDots)", A.version)
     H.eq(A.Label("2026-10-09"), "2026-10-09", "a whole-date night's label is its date")
     H.eq(A.Label("2026-10-24 409"), "2026-10-24 raid 409", "a raid not on record: its instance number")
     local rs = A.Raiders()
