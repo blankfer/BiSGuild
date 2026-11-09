@@ -1,5 +1,11 @@
 # BiSGuild
 
+## Unreleased
+
+- **Map dots step aside for OpenMap.** OpenMap now shows your guild on its map too, so each guildmate got two marks. With OpenMap installed, BiS Guild's dots stay off and it says so once. Want both? `/bisg dots on`, or the new "BiS Guild dots" switch in OpenMap's own menu.
+- **A dot's tooltip says where it stands.** It used to show the guild roster's zone, which can lag behind (a dot in Tirisfal said "Durotar").
+- For other addons: `BiSGuildAPI.MapDots()` (version 3) says whether our dots are on the map.
+
 ## 1.0.0 - Forever 1.0
 
 - **A new install starts quiet.** Only the main job is on: the raider terminal (`/bisg`) and the raid record. The "X just logged in - invite?" pop-up, guildmates' dots on the world map and the "a guildmate runs a newer version" line in chat start off, until you switch them on. **Already using BiS Guild? Nothing changes for you** - every switch stays as you had it.

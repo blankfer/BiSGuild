@@ -40,7 +40,8 @@ function ns.Say(cmd, rest)
         if r == "on" or r == "off" then ns.Opt.SetDots(r == "on") end
         local n = ns.Pins.Update()
         ns.Print("guildmates on the world map: %s - %d dot(s) now. %s", ns.Pins.On() and ns.T.text("good", "on")
-            or ns.T.text("warn", "off"), n, ns.T.text("muted", "/bisg dots on | off"))
+            or (ns.Pins.Aside() and ns.T.text("warn", "stepped aside for OpenMap's") or ns.T.text("warn", "off")), n,
+            ns.T.text("muted", "/bisg dots on | off"))
         return
     end
     if cmd == "note" and ns.Copy then

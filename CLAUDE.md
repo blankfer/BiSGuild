@@ -74,7 +74,7 @@ Read ../_bisdev/CLAUDE.md first.
   (old HAVE/WANT/NIGHT) and never sit beside raids of their date. Show a key with `S.Label` /
   `S.DateOf`, never raw. **`dev/test_logreport.py` is NOT in check.sh** - run it by hand after any
   reader or Store change (it was broken 16-17 Oct and nobody saw): `python dev/test_logreport.py`. `Core/Terminal.lua`, `Core/Where.lua`: the raider
-  terminal and its WHERE page. `Core/Pins.lua`: guildmates' dots on the world map. Plan: `dev/TERMINAL.md`.
+  terminal and its WHERE page. `Core/Pins.lua`: guildmates' dots on the world map. With OpenMap installed (`_G.OpenMapAPI`, asked late) they STEP ASIDE (`M.Aside`, the courtesy rule) unless `dotsBesideOpenMap` (set by any "on": `/bisg dots on`, the options, our `RegisterMenuToggle` switch in OpenMap's menu, `M.Hook`); said once (`toldOpenMap`, `M.Tell`); `BiSGuildAPI.MapDots()` v3. The tooltip's zone is the dot's own map (`M.ZoneOf`), not the roster's. Plan: `dev/TERMINAL.md`.
 - `dev/tests.lua`: headless suite on `dev/kit.lua` (Nebbinator's strict harness, verbatim). Loads the TOC's
   files in order, fails on any global not in `ALLOWED`. `dev/theme.lua`: the palette law.
 - `dev/release.ps1`: zip + CurseForge upload (normally GitHub runs it on a tag — see

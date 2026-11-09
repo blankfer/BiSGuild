@@ -39,6 +39,9 @@
 --                                      seconds), time, date } | nil, "no raid pasted"          (v1)
 --   BiSGuildAPI.Open(what)         -> opens the terminal: "raiders" | "bosses" | "where" |
 --                                      "roster" | a raider's or boss's name                    (v1)
+--   BiSGuildAPI.MapDots()          -> true when our guildmates' dots are on the world map, else
+--                                      false and why: "off" | "beside OpenMap" (we step aside for
+--                                      its own guild layer unless the player asked for both)    (v3)
 --
 -- Callbacks:
 --   BiSGuildAPI.RegisterCallback(owner, "BiSGuild_Night", fn)   fn(date) - a raid night entered the
@@ -47,7 +50,7 @@
 --------------------------------------------------------------------------------
 local _, ns = ...
 
-local API = { major = 1, version = 2 }
+local API = { major = 1, version = 3 }
 BiSGuildAPI = API
 
 local function deep(v)
@@ -70,6 +73,16 @@ local function guard(fn)
         if not good then return nil, "error" end
         return a, b
     end
+end
+
+--- (v3) the courtesy check, the other way round: may another map addon draw the guild without doubling ours?
+function API.MapDots()
+    local P = ns.Pins
+    if not (P and ns.DB) then return nil, "not ready" end
+    local ok, on = pcall(P.On)
+    if ok and on then return true end
+    local okA, aside = pcall(P.Aside)
+    return false, (okA and aside) and "beside OpenMap" or "off"
 end
 
 API.Nights = guard(function() return deep(ns.S.Dates()) end)

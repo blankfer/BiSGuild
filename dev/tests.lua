@@ -2551,6 +2551,44 @@ do
     _G.SlashCmdList.BISGUILD("dots on")
     H.eq(#pins(), 1, "/bisg dots on: back")
 
+    -- the tooltip says where the dot STANDS (Arn 8 Nov: a dot in Tirisfal said "Durotar" - the roster lags)
+    local keepMap = _G.C_Map
+    _G.C_Map = setmetatable({ GetMapInfo = function(m) return m == 1454 and { name = "Orgrimmar" } or nil end },
+                            { __index = keepMap })
+    lines = {}
+    _G.GameTooltip = { SetOwner = function() end, Show = function() end, Hide = function() end,
+                       AddLine = function(_, s2) lines[#lines + 1] = s2 end }
+    pins()[1].icon:Fire("OnEnter")
+    H.ok(lines[3] == "Orgrimmar", "the zone of the dot's own map, not the roster's", table.concat(lines, " | "))
+    _G.GameTooltip, _G.C_Map = nil, keepMap
+
+    -- OPENMAP SHOWS THE GUILD TOO (Arn 8 Nov: "open maps does the same thing now"): we step aside, say it once, and
+    -- put our switch in OpenMap's menu
+    local toggles, said = {}, {}
+    local keepPrint = NS.Print
+    NS.Print = function(fmt, ...) said[#said + 1] = fmt:format(...) end
+    _G.OpenMapAPI = { RegisterMenuToggle = function(owner, spec) toggles[#toggles + 1] = { owner = owner, spec = spec } end }
+    _G.BiSGuildDB.toldOpenMap = nil
+    fire("PLAYER_LOGIN")
+    H.ok(M.Aside() and not M.On() and #pins() == 0, "OpenMap here: our dots step aside")
+    H.ok(#said == 1 and said[1]:find("step aside", 1, true) and said[1]:find("/bisg dots on", 1, true),
+         "said once, with the way back", said[1])
+    H.ok(#toggles == 1 and toggles[1].spec.id == M.TOGGLE_ID and toggles[1].spec.label == "BiS Guild dots"
+         and toggles[1].spec.get() == false, "our switch in OpenMap's menu, showing off")
+    local ok3, why3 = BiSGuildAPI.MapDots()
+    H.ok(ok3 == false and why3 == "beside OpenMap", "BiSGuildAPI.MapDots: off, beside OpenMap", tostring(why3))
+    fire("PLAYER_LOGIN")
+    H.ok(#said == 1 and #toggles == 1, "the next login: not said again, not registered twice")
+    toggles[1].spec.set(true)
+    H.ok(M.On() and #pins() == 1 and _G.BiSGuildDB.dotsBesideOpenMap, "OpenMap's switch on: both maps' marks, as asked")
+    H.ok(BiSGuildAPI.MapDots() == true, "and the API says so")
+    _G.SlashCmdList.BISGUILD("dots off")
+    H.ok(not M.On() and _G.BiSGuildDB.dotsBesideOpenMap == nil, "/bisg dots off: off, and the next on asks again")
+    _G.SlashCmdList.BISGUILD("dots on")
+    H.ok(M.On() and #pins() == 1, "/bisg dots on with OpenMap here: both")
+    _G.OpenMapAPI, NS.Print = nil, keepPrint
+    H.ok(M.On(), "OpenMap gone: our dots as ever")
+
     -- NOT YOUR GROUP (Arn, 22 Oct: "both of these blue marks are frank how about they only show up if we are not
     -- in a party or raid"): Cara joins your raid - the game draws her, so her dot goes; she leaves, it comes back
     H.inRaid, H.raid = true, { "Me", "Cara" }
@@ -2620,7 +2658,7 @@ do
     H.ok(n and n.raiders.Bob.deaths == 2 and n.bosses["Boss One"].best == 250000, "Night(date): the whole night")
     H.eq(select(2, A.Night("1999-01-01")), "no such night", "an unknown night: nil and why")
     -- v2: a key as people read it (dev/NIGHTS.md)
-    H.eq(A.version, 2, "the API's version went up with raids as nights")
+    H.ok(A.version >= 2, "the API's version went up with raids as nights (3 since MapDots)", A.version)
     H.eq(A.Label("2026-10-09"), "2026-10-09", "a whole-date night's label is its date")
     H.eq(A.Label("2026-10-24 409"), "2026-10-24 raid 409", "a raid not on record: its instance number")
     local rs = A.Raiders()

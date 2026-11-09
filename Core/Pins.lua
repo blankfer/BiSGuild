@@ -37,7 +37,51 @@ M.pool = {}
 local function HBD() return LibStub and LibStub("HereBeDragons-Pins-2.0", true) end
 local function Lib() return _G.LibBiSComm end
 
-function M.On() return ns.DB().mapDots ~= false end
+--[[ OPENMAP SHOWS THE GUILD TOO (8 Nov 2026, Arn: "open maps does the same thing now" - its "Friends and guild"
+  layer put a second mark on each guildmate, beside ours). The family's courtesy rule: we step aside. With OpenMap
+  here our dots stay off unless you asked for both - `/bisg dots on`, our switch in OpenMap's own menu
+  (OpenMapAPI.RegisterMenuToggle), or the options - and that is said ONCE, with the way back. OpenMap is known by its
+  API's table (it loads after us, so it is asked late - at PLAYER_LOGIN or later, never at load). Its API cannot say
+  whether its layer is on, so being installed is enough. BiSGuildAPI.MapDots() lets it (or anyone) ask us. ]]
+M.TOGGLE_ID = "bisguild_dots"
+
+function M.Neighbour() return type(_G.OpenMapAPI) == "table" end
+
+--- Stepping aside for OpenMap now: dots wanted, OpenMap here, both not asked for.
+function M.Aside()
+    local d = ns.DB()
+    return d.mapDots ~= false and M.Neighbour() and not d.dotsBesideOpenMap
+end
+
+function M.On() return ns.DB().mapDots ~= false and not M.Aside() end
+
+--- Once, the first login with OpenMap: why the dots went, and how to have them back.
+function M.Tell()
+    local d = ns.DB()
+    if not M.Aside() or d.toldOpenMap then return false end
+    d.toldOpenMap = true
+    ns.Print("OpenMap shows your guild on the map, so BiS Guild's dots step aside. Both? %s, or the "
+        .. "\"BiS Guild dots\" switch in OpenMap's menu.", ns.T.text("good", "/bisg dots on"))
+    return true
+end
+
+--- Our switch in OpenMap's menu (its API's "add your own"), once.
+function M.Hook()
+    local api = _G.OpenMapAPI
+    if M.hooked or type(api) ~= "table" or type(api.RegisterMenuToggle) ~= "function" then return false end
+    local ok = pcall(api.RegisterMenuToggle, "BiSGuild", {
+        id = M.TOGGLE_ID, label = "BiS Guild dots",
+        get = function() return M.On() end,
+        set = function(v) if ns.Opt and ns.Opt.SetDots then ns.Opt.SetDots(v) end end,
+    })
+    M.hooked = ok
+    return ok
+end
+
+--- Where a dot stands, by its own map (the roster's zone lags: Arn's screenshot, a dot in Tirisfal said "Durotar").
+function M.ZoneOf(map)
+    return ns.Where and ns.Where.MapName and ns.Where.MapName(map) or nil
+end
 
 --- Who is in your party or raid, by whole name (Forever: "Name Surname", the name the shared spots carry).
 function M.Grouped()
@@ -72,8 +116,9 @@ local function NewPin()
         local m = ns.K and ns.K.Member(self.who)
         if m then
             tip:AddLine(("level %s  %s"):format(tostring(m.level or "?"), tostring(m.rank or "")), 1, 1, 1)
-            if m.zone then tip:AddLine(m.zone, 0.7, 0.7, 0.7) end
         end
+        local zone = M.ZoneOf(self.map) or (m and m.zone)
+        if zone then tip:AddLine(zone, 0.7, 0.7, 0.7) end
         tip:AddLine("BiS Guild", 0.73, 0.5, 1)
         tip:Show()
     end)
@@ -120,7 +165,7 @@ function M.Update()
             end
             if not p.placed then
                 local b = p.frame
-                b.who = sender
+                b.who, b.map = sender, s.map
                 local m = ns.K and ns.K.Member(sender)
                 local cc = m and m.class and colours and colours[m.class]
                 if cc then b.tex:SetColorTexture(cc.r, cc.g, cc.b, 1) else b.tex:SetColorTexture(0.93, 0.91, 0.96, 1) end
@@ -162,5 +207,5 @@ f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("GROUP_ROSTER_UPDATE")
 f:SetScript("OnEvent", function(_, event)
     if event == "GROUP_ROSTER_UPDATE" then M.Soon() return end     -- joined or left: dots on or off
-    M.Boot() M.Update()
+    M.Boot() M.Hook() M.Tell() M.Update()
 end)
