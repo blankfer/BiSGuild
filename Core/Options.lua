@@ -41,8 +41,6 @@ end
 --- Guildmates' dots on the world map (Core/Pins.lua). Answers how many dots there are now.
 function O.SetDots(on)
     ns.DB().mapDots = on and true or false
-    -- on, with OpenMap here: you asked for both (Core/Pins.lua, M.Aside); off: the next "on" asks again
-    ns.DB().dotsBesideOpenMap = (on and ns.Pins and ns.Pins.Neighbour()) and true or nil
     return ns.Pins and ns.Pins.Update() or 0
 end
 

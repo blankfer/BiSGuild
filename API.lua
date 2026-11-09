@@ -39,9 +39,9 @@
 --                                      seconds), time, date } | nil, "no raid pasted"          (v1)
 --   BiSGuildAPI.Open(what)         -> opens the terminal: "raiders" | "bosses" | "where" |
 --                                      "roster" | a raider's or boss's name                    (v1)
---   BiSGuildAPI.MapDots()          -> true when our guildmates' dots are on the world map, else
---                                      false and why: "off" | "beside OpenMap" (we step aside for
---                                      its own guild layer unless the player asked for both)    (v3)
+--   BiSGuildAPI.MapDots()          -> true when our guildmates' radar tracks are on the world
+--                                      map, else false, "off" - so another map addon can choose
+--                                      not to double them                                       (v3)
 --
 -- Callbacks:
 --   BiSGuildAPI.RegisterCallback(owner, "BiSGuild_Night", fn)   fn(date) - a raid night entered the
@@ -81,8 +81,7 @@ function API.MapDots()
     if not (P and ns.DB) then return nil, "not ready" end
     local ok, on = pcall(P.On)
     if ok and on then return true end
-    local okA, aside = pcall(P.Aside)
-    return false, (okA and aside) and "beside OpenMap" or "off"
+    return false, "off"
 end
 
 API.Nights = guard(function() return deep(ns.S.Dates()) end)
