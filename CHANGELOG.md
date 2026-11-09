@@ -1,6 +1,6 @@
 # BiSGuild
 
-## Unreleased
+## 1.1.0
 
 - **Guildmates on the world map are radar tracks now.** The little squares are gone. Each guildmate is drawn like a fighter jet's radar screen shows a friendly:
   - a half-circle in their class colour;
