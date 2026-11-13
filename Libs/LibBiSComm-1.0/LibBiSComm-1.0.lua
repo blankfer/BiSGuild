@@ -55,7 +55,12 @@
 -- release is marked critical by its TOC (## X-BiS-Critical: <version>) and that, or a lib too new to talk to us, is
 -- the only thing ever said. Said once a session, never in a fight; a late login is answered by whoever is newer,
 -- the first answer silencing the rest.
-local MAJOR, MINOR = "LibBiSComm-1.0", 18
+-- minor 19 (13 Nov 2026): no event is (un)registered after load. A player on a gamepad got "blocked from an action
+-- only available to the Blizzard UI" every so often, naming BiS> Memories: FojjiCore's group events and BiS> in's
+-- two were switched on and off from timers (joining a group, an ask running out), and Forever refuses that while
+-- its gamepad UI is on (_bisdev/docs/solved.md, "Registering events can itself be guarded"). Now registered once at
+-- load and gated in the handlers (lib._fjGrouped, lib._bisinWant).
+local MAJOR, MINOR = "LibBiSComm-1.0", 19
 
 local lib = _G.LibBiSComm
 if lib and (lib.MINOR or 0) >= MINOR then return end   -- an equal or newer copy won
@@ -973,6 +978,7 @@ function lib:Boot()
     if self.StartSpots then self:StartSpots() end -- minor 12: guild spots
     if self.StartRides then self:StartRides() end -- minor 15: the ride clock
     if self.StartFojji then self:StartFojji() end -- minor 16: FojjiCore's Experience and Campfires windows
+    if self.StartBisIn then self:StartBisIn() end -- minor 19: BiS> in's two events, registered once, here
     if self.StartVersions then self:StartVersions() end -- minor 18: who runs which version
 
     f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
@@ -2100,28 +2106,39 @@ do
         return n
     end
 
+    -- minor 19 (13 Nov 2026, a player's gamepad): both events registered ONCE, at load (lib:StartBisIn), and the
+    -- handler asks lib._bisinWant. This used to register/unregister them as asks opened and closed - from timers too
+    -- (an ask running out) - and Forever refuses (un)registering from a timer while the gamepad UI is on: the
+    -- "blocked from an action only available to the Blizzard UI" dialog, naming whichever BiS addon's copy won.
+    function lib:StartBisIn()
+        if not CreateFrame then return end
+        local f = self._bisinFrame or CreateFrame("Frame")
+        self._bisinFrame = f
+        self._bisinWant = self._bisinWant or {}
+        if not f._all then
+            for _, ev in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_AURA" }) do
+                if f.RegisterUnitEvent then pcall(f.RegisterUnitEvent, f, ev, "player") else pcall(f.RegisterEvent, f, ev) end
+            end
+            f._all = true
+        end
+        f:SetScript("OnEvent", function(_, event, unit, _, spellId)
+            if unit ~= "player" then return end
+            local w = lib._bisinWant
+            if event == "UNIT_AURA" then
+                if w.aura then lib:BisInLanded() end
+            elseif w.cast then
+                lib:BisInCast(spellId)
+            end
+        end)
+    end
+
     -- my casts while I give something; my buffs while I have an ask open - nothing else, nothing while out
     function lib:BisInWatch()
-        local f = self._bisinFrame
-        if not f and CreateFrame then
-            f = CreateFrame("Frame")
-            self._bisinFrame = f
-            f:SetScript("OnEvent", function(_, event, unit, _, spellId)
-                if unit ~= "player" then return end
-                if event == "UNIT_AURA" then lib:BisInLanded() else lib:BisInCast(spellId) end
-            end)
-        end
-        if not f then return end
         local s = state()
-        local function want(ev, on)
-            if on then
-                if f.RegisterUnitEvent then pcall(f.RegisterUnitEvent, f, ev, "player") else pcall(f.RegisterEvent, f, ev) end
-            else
-                pcall(f.UnregisterEvent, f, ev)
-            end
-        end
-        want("UNIT_SPELLCAST_SUCCEEDED", s.on and next(s.give) ~= nil)
-        want("UNIT_AURA", s.on and #mine() > 0)
+        local w = self._bisinWant or {}
+        self._bisinWant = w
+        w.cast = (s.on and next(s.give) ~= nil) and true or false
+        w.aura = (s.on and #mine() > 0) and true or false
     end
 end
 
@@ -2409,19 +2426,16 @@ do
         if not After(0.2 + math.random() * 0.6, answer) then answer() end
     end
 
-    -- in a group: listen to the bags, the professions, the buff and the casts; alone, not at all
+    -- in a group: listen to the bags, the professions, the buff and the casts; alone, not at all.
+    -- minor 19 (13 Nov 2026): registered ONCE in StartFojji (load time) and gated by lib._fjGrouped in the handler.
+    -- FojjiGrouped used to (un)register them from the roster timer - refused by Forever while the gamepad UI is on.
     local GROUP_EVENTS = { "BAG_UPDATE_DELAYED", "SKILL_LINES_CHANGED", "PLAYER_REGEN_ENABLED" }
+    local GROUP_UNIT_EVENTS = { "UNIT_AURA", "UNIT_SPELLCAST_SUCCEEDED" }
+    local GROUP_ONLY = { BAG_UPDATE_DELAYED = true, SKILL_LINES_CHANGED = true, PLAYER_REGEN_ENABLED = true,
+                         UNIT_AURA = true, UNIT_SPELLCAST_SUCCEEDED = true }
     function lib:FojjiGrouped(on)
-        local f = self._fjFrame
-        if not f or (self._fjGrouped or false) == on then return end
+        if not self._fjFrame or (self._fjGrouped or false) == on then return end
         self._fjGrouped = on
-        for _, ev in ipairs(GROUP_EVENTS) do
-            pcall(on and f.RegisterEvent or f.UnregisterEvent, f, ev)
-        end
-        for _, ev in ipairs({ "UNIT_AURA", "UNIT_SPELLCAST_SUCCEEDED" }) do
-            if on and f.RegisterUnitEvent then pcall(f.RegisterUnitEvent, f, ev, "player")
-            else pcall(on and f.RegisterEvent or f.UnregisterEvent, f, ev) end
-        end
     end
 
     function lib:FojjiRoster()
@@ -2441,18 +2455,30 @@ do
     end
 
     function lib:StartFojji()
-        if self._fjFrame or not CreateFrame then return end
-        if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
-            pcall(C_ChatInfo.RegisterAddonMessagePrefix, FJ_XP)
-            pcall(C_ChatInfo.RegisterAddonMessagePrefix, FJ_CAMP)
+        if not CreateFrame then return end
+        -- an older copy (minor 16-18) may have made the frame already: this one, loading after it (still load
+        -- time), adds the group events once and takes over the handler
+        local f = self._fjFrame
+        if f and f._all then return end
+        if not f then
+            if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+                pcall(C_ChatInfo.RegisterAddonMessagePrefix, FJ_XP)
+                pcall(C_ChatInfo.RegisterAddonMessagePrefix, FJ_CAMP)
+            end
+            f = CreateFrame("Frame")
+            self._fjFrame = f
+            for _, ev in ipairs({ "CHAT_MSG_ADDON", "CHAT_MSG_ADDON_LOGGED", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD",
+                                  "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP" }) do
+                pcall(f.RegisterEvent, f, ev)
+            end
         end
-        local f = CreateFrame("Frame")
-        self._fjFrame = f
-        for _, ev in ipairs({ "CHAT_MSG_ADDON", "CHAT_MSG_ADDON_LOGGED", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD",
-                              "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP" }) do
-            pcall(f.RegisterEvent, f, ev)
+        for _, ev in ipairs(GROUP_EVENTS) do pcall(f.RegisterEvent, f, ev) end
+        for _, ev in ipairs(GROUP_UNIT_EVENTS) do
+            if f.RegisterUnitEvent then pcall(f.RegisterUnitEvent, f, ev, "player") else pcall(f.RegisterEvent, f, ev) end
         end
+        f._all = true
         f:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
+            if GROUP_ONLY[event] and not lib._fjGrouped then return end    -- alone: heard, not acted on
             if event == "CHAT_MSG_ADDON" or event == "CHAT_MSG_ADDON_LOGGED" then
                 lib:FojjiHeard(a1, a2, a3, a4)
             elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
@@ -2476,6 +2502,7 @@ do
     end
 end
 if lib._booted then lib:StartFojji() end
+if lib._booted then lib:StartBisIn() end
 
 --------------------------------------------------------------------
 -- VER (minor 18): who runs which version - listed, and said only when it is critical
