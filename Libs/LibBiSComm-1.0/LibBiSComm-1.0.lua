@@ -60,7 +60,7 @@
 -- two were switched on and off from timers (joining a group, an ask running out), and Forever refuses that while
 -- its gamepad UI is on (_bisdev/docs/solved.md, "Registering events can itself be guarded"). Now registered once at
 -- load and gated in the handlers (lib._fjGrouped, lib._bisinWant).
-local MAJOR, MINOR = "LibBiSComm-1.0", 19
+local MAJOR, MINOR = "LibBiSComm-1.0", 20
 
 local lib = _G.LibBiSComm
 if lib and (lib.MINOR or 0) >= MINOR then return end   -- an equal or newer copy won
@@ -1287,6 +1287,16 @@ lib.RIDE_STOPS = {
   { id = "sw_aub", group = "stormwind", name = "Stormwind Harbor", map = 1453, x = 24.2, y = 55.2, r = 2.2,
     kind = "boat", to = "auberdine_s", toName = "Auberdine",
     npc = 276318, who = "Idrieth Mossgrove", face = "Idrieth", src = "MEASURED" },
+  -- FOREVER'S OWN: TANARIS - THE RIVERGLADES (minor 20; Arn, 13 Nov, on the boat at Steamwheedle Port: "no card"). Arn
+  -- stood at 68, 23 by Wharfmaster Steamfizzle (npc 260405); the Polestar codex (facts) has him at 67.6 23.1 and
+  -- Wharfmaster Whizzbuzz (259961) at the Riverglades end, 79.4 53.1 on map 2548. P = that codex. The ship's name and
+  -- its loop: not known yet - the clock learns the loop from the first ride seen.
+  { id = "tan_rg", group = "steamwheedle", name = "Steamwheedle Port", map = 1446, x = 67.6, y = 23.1, r = 2.2,
+    kind = "boat", to = "riverglades", toName = "the Riverglades",
+    npc = 260405, who = "Wharfmaster Steamfizzle", face = "Steamfizzle", src = "P" },
+  { id = "rg_tan", group = "riverglades", name = "the Riverglades' pier", map = 2548, x = 79.4, y = 53.1, r = 2.2,
+    kind = "boat", to = "steamwheedle", toName = "Tanaris",
+    npc = 259961, who = "Wharfmaster Whizzbuzz", face = "Whizzbuzz", src = "P" },
   -- THE DEEPRUN TRAM (minor 17; Arn, 23 Oct: "go ahead with the tram in the library"). No map in its zone (C_Map is
   -- nil the whole ride - measured), so its stops stand on lib.TRAM_MAP, and lib:RideSpot hands back your WORLD
   -- position there: along the track and across it, in tens of yards (UnitPosition: x -45.6 the whole ride, y 2471.3
