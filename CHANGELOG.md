@@ -1,5 +1,10 @@
 # BiSGuild
 
+## 1.1.1
+
+- **Fixed: a gamepad could get "action blocked" with BiS addons running.** The shared BiS messaging library no longer switches a game event on or off from a timer.
+- **Ride clocks know Forever's Tanaris - Riverglades boat.**
+
 ## 1.1.0
 
 - **Guildmates on the world map are radar tracks now.** The little squares are gone. Each guildmate is drawn like a fighter jet's radar screen shows a friendly:
