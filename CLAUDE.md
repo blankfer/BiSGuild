@@ -57,6 +57,12 @@ Read ../_bisdev/CLAUDE.md first.
   switch, "open the terminal", `/bisg`), login pop-up, map dots, the BiS channel (share my spot as its row), version
   note. `O.Model().onChange` repaints the options window when it is open. **No minimap button** - never had one, so no
   right-click to fix; `/bisg` and the BiS> page are the doors.
+- **Books keyed by the guild name alone (21 Nov 2026)**: `BiSGuildDB.guilds[ns.GuildKey()]` is `"<guild>"`, guildless
+  `"-|<whole name>"` (`ns.WholeName`, GetUnitName first). It was `"<realm>|<guild>"` until Forever 1.60.1 Live Update 2
+  made every realm API answer `""`/0. `ns.Fold` (once per key per session, from `ns.Books()` and `ns.FoldNow()` at
+  PLAYER_LOGIN / guild updates) folds every old `"<any realm>|<guild>"` book into it field by field (`FOLD.*` in
+  Init.lua; the record through Store's own `S.Put`/`S.PutGear`) and moves the originals to `BiSGuildDB.oldRealmBooks`
+  (never deleted). Same-named guilds on two realms are one book now - the client cannot tell them apart.
 - The terminal's right-click player menu (`K.PlayerMenu`) opens only where `IsInInstance()` reads a plain false
   (`K.OutInTheWorld`): inside an instance the game's menu breaks on secret frame rects.
 - `Libs/`: embedded `BiSTheme/Console.lua`, `Options.lua` (since 1.0.0), `Settings.lua` and `LibBiSComm-1.0` —

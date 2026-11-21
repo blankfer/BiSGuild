@@ -1,5 +1,9 @@
 # BiSGuild
 
+## 1.1.2
+
+- **Fixed: the terminal, the raid record, punctuality and the loot ledger looked empty after Forever's 21 Nov update.** The game stopped telling addons the realm name, and BiS Guild filed each guild's data under realm + guild, so it went looking in an empty place. Your guild's data is now filed under the guild name alone, and everything from before is moved over by itself at your next login - nothing to click. The old copies are kept, never deleted.
+
 ## 1.1.1
 
 - **Fixed: a gamepad could get "action blocked" with BiS addons running.** The shared BiS messaging library no longer switches a game event on or off from a timer.

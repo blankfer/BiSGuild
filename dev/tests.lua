@@ -27,6 +27,19 @@ do
         return fr
     end
 end
+-- NO REALM ON FOREVER (1.60.1 Live Update 2, 21 Nov 2026: "APIs that return realm names or IDs now instead
+-- return an empty string or zero in-place of those values ... GetRealmName, GetRealmID, and C_BattleNet APIs").
+-- The kit stays verbatim, so the client's new shape is taught here: every realm answer is "" or 0.
+_G.GetRealmName = function() return "" end
+_G.GetNormalizedRealmName = function() return "" end
+_G.GetRealmID = function() return 0 end
+do
+    local kitInfo = _G.GetPlayerInfoByGUID
+    _G.GetPlayerInfoByGUID = function(...)
+        local a, b, c, d, e, f = kitInfo(...)
+        return a, b, c, d, e, f, ""
+    end
+end
 local ROOT = os.getenv("BISGUILD") or (HERE .. "/..")
 local FILES = H.TOC(ROOT, "BiSGuild.toc")
 
@@ -951,6 +964,181 @@ do
     H.eq(NS.Books().record, nil, "a second guild does not get them too")
     _G.GetGuildInfo = realGI
     d.guilds, d.filedTo = keepGuilds, keepFiled
+end
+
+-- NO REALM ON FOREVER (1.60.1 Live Update 2, 21 Nov 2026). The books were keyed "<realm>|<guild>"; the client
+-- now names the realm "", so every book came up as "|<guild>" - empty - beside the real one. The books are
+-- keyed by the guild name alone now (guildless: "-|<whole name>"), and every old book of that guild, from any
+-- realm and the stray "|<guild>", is FOLDED into it at the first login - then kept aside, never deleted.
+H.section("no realm on Forever: one book per guild, old realm books folded in at login")
+do
+    local F = S.F
+    local function pull(t, e, b, who)
+        local r = {}
+        for _, w in ipairs(who) do r[w] = F.READY + F.FLASK + F.FOOD + F.SEEN end
+        return { t = t, e = e, b = b, k = 1, ms = 60000 + e, r = r, d = {}, p = {} }
+    end
+    local function raid(pulls)
+        local n = { v = 2, i = 409, zone = "Molten Core", start = pulls[1].t, pulls = pulls }
+        n.kills, n.raiders, n.bosses = S.Derive(pulls)
+        return n
+    end
+    local function count(t) local n = 0 for _ in pairs(type(t) == "table" and t or {}) do n = n + 1 end return n end
+    local T0 = 1793000000
+    local keep = { db = _G.BiSGuildDB, GUN = _G.GetUnitName, GI = _G.GetGuildInfo, IG = _G.IsInGuild,
+                   rep = _G.BiSGuildReport, imported = S.imported, ledgers = NS.Loot.ledgers }
+    _G.BiSGuildReport = nil
+    -- Forever's names: UnitName the first name ("Kumlust"), GetUnitName(unit, false) the whole one
+    _G.GetUnitName = function(u) if u == "player" then return "Kumlust Stoneward" end return nil end
+    -- A FAKE LOGIN: the saved variables come in, the client names the guild. No click, no window, nothing typed.
+    local function login(db)
+        _G.BiSGuildDB = db
+        NS.folded, S.imported, NS.Loot.ledgers = {}, {}, {}
+        fire("ADDON_LOADED", "BiSGuild")
+        fire("PLAYER_GUILD_UPDATE")
+        return _G.BiSGuildDB
+    end
+
+    H.eq(GetRealmName(), "", "the stand-in names the realm as the client does now: empty")
+    H.eq(GetRealmID(), 0, "and its id: zero")
+    H.eq(NS.GuildKey(), "The Heathens", "a guild's books are keyed by the guild name alone")
+    _G.IsInGuild = function() return false end
+    H.eq(NS.GuildKey(), "-|Kumlust Stoneward", "guildless: by the WHOLE name (UnitName is the first name only)")
+    _G.IsInGuild = keep.IG
+
+    -- (a) Arn's save on 21 Nov: the real book under the realm, a near-empty stray "|guild" beside it, another
+    -- guild's book, and the guildless books of this character (first name) and of another one
+    local MC = raid({ pull(T0, 663, "Lucifron", { "Ann", "Bo" }), pull(T0 + 3600, 665, "Gehennas", { "Ann", "Bo" }) })
+    local realBook = {
+        roster = "Ann, Bo",
+        record = { nights = { ["2026-11-10 409"] = MC,
+                              ["2026-10-01"] = { kills = 1, raiders = { Ann = raider(1, 1) }, bosses = {} } },
+                   gear = { Ann = { date = "2026-11-10", gear = { { id = 1 } } } }, archived = {}, restored = {} },
+        punctual = { ann = { [T0] = { d = 30, late = true } } },
+        copies = { ["Gnarly Gnar"] = { v = "0.5.2", t = 100 } },
+        loot = { lines = { "L1", "L2" }, meta = { [7] = { w = 2 } }, bad = {} },
+    }
+    local d = login({
+        comm = true, forever10 = true, filedTo = "CAMWOW US1 Realm 2 PvP|The Heathens",
+        guilds = {
+            ["CAMWOW US1 Realm 2 PvP|The Heathens"] = realBook,
+            ["|The Heathens"] = { record = { nights = {}, gear = {}, archived = {}, restored = {} }, punctual = {},
+                                  loot = { lines = {}, meta = {}, bad = {} } },
+            ["CAMWOW US1 Realm 2 PvP|Some Other Guild"] = { roster = "Zed" },
+            ["-|CAMWOW US1 Realm 2 PvP|Kumlust"] = { loot = { lines = { "G1" }, meta = {}, bad = {} } },
+            ["-||Kumlust"] = {},
+            ["-|CAMWOW US1 Realm 6 PvP|Pakune"] = { loot = { lines = { "P1" } } },
+        },
+    })
+    -- read RAW first: live in the saved table itself, not only once something asks for the books
+    local g = d.guilds["The Heathens"]
+    H.ok(type(g) == "table", "after a login with no user action, the guild's book is under its name")
+    H.eq(g and g.roster, "Ann, Bo", "the pasted roster is live")
+    H.ok(g and g.record and g.record.nights["2026-11-10 409"] ~= nil and g.record.nights["2026-10-01"] ~= nil,
+         "both nights are live (a raid and a whole-date night)")
+    H.ok(g and g.punctual and g.punctual.ann and g.punctual.ann[T0] and g.punctual.ann[T0].late == true,
+         "the punctuality is live")
+    H.ok(g and g.copies and g.copies["Gnarly Gnar"] ~= nil, "the guildmates' versions are live")
+    H.ok(g and g.loot and #g.loot.lines == 2 and g.loot.meta[7] and g.loot.meta[7].w == 2, "the loot ledger is live")
+    H.eq(d.guilds["CAMWOW US1 Realm 2 PvP|The Heathens"], nil, "the old realm book is out of the books")
+    H.eq(d.guilds["|The Heathens"], nil, "and so is the stray one the bug made")
+    H.ok(type(d.oldRealmBooks) == "table" and d.oldRealmBooks["CAMWOW US1 Realm 2 PvP|The Heathens"] == realBook
+         and d.oldRealmBooks["|The Heathens"] ~= nil, "both kept aside under oldRealmBooks, untouched")
+    H.ok(realBook.record.nights["2026-11-10 409"] ~= g.record.nights["2026-11-10 409"],
+         "the live book holds copies, so the one kept aside never changes with it")
+    -- and the addon reads it
+    H.eq(NS.Books(), g, "ns.Books() answers that book")
+    H.eq(#S.Dates(), 2, "the record shows both nights")
+    H.eq(NS.Login.Book().ann[T0].d, 30, "the punctuality reads back")
+    -- (fence) another guild's book is not folded in, nor touched
+    H.eq(d.guilds["CAMWOW US1 Realm 2 PvP|Some Other Guild"] and d.guilds["CAMWOW US1 Realm 2 PvP|Some Other Guild"].roster,
+         "Zed", "another guild's realm book stays as it was until one of ITS members logs in")
+    _G.GetGuildInfo = function() return "Some Other Guild" end
+    H.eq(NS.Books().roster, "Zed", "an alt in that guild: its own book, folded under its own name")
+    H.eq(d.guilds["Some Other Guild"] and d.guilds["Some Other Guild"].roster, "Zed", "filed as 'Some Other Guild'")
+    H.eq(#S.Dates(), 0, "and it never sees The Heathens' nights")
+    _G.GetGuildInfo = keep.GI
+    H.eq(NS.Books().roster, "Ann, Bo", "back on the main: its own book, as it was")
+    -- guildless: the first-name books of THIS character fold into its whole name; another character's stay
+    _G.IsInGuild = function() return false end
+    fire("PLAYER_GUILD_UPDATE")
+    local solo = d.guilds["-|Kumlust Stoneward"]
+    H.ok(type(solo) == "table" and solo.loot and solo.loot.lines[1] == "G1", "guildless: folded into the whole name at once")
+    H.ok(d.guilds["-|CAMWOW US1 Realm 2 PvP|Kumlust"] == nil and d.guilds["-||Kumlust"] == nil
+         and d.oldRealmBooks["-|CAMWOW US1 Realm 2 PvP|Kumlust"] ~= nil and d.oldRealmBooks["-||Kumlust"] ~= nil,
+         "its old books kept aside")
+    H.ok(d.guilds["-|CAMWOW US1 Realm 6 PvP|Pakune"] ~= nil, "another character's guildless book is not taken")
+    _G.IsInGuild = keep.IG
+
+    -- (b) the next login: nothing moves, nothing doubles
+    local aside = count(d.oldRealmBooks)
+    d = login(d)
+    g = d.guilds["The Heathens"]
+    H.eq(count(d.oldRealmBooks), aside, "a second login moves nothing (the fold is once)")
+    H.ok(count(g.record.nights) == 2 and count(g.punctual.ann) == 1 and #g.loot.lines == 2, "and doubles nothing")
+    -- a stray made again (an older BiS Guild run once) folds in too, kept aside beside the first
+    d.guilds["|The Heathens"] = { roster = "stale paste", copies = { Newbie = { v = "1.1.1", t = 300 } } }
+    d = login(d)
+    g = d.guilds["The Heathens"]
+    H.ok(d.guilds["|The Heathens"] == nil and d.oldRealmBooks["|The Heathens (2)"] ~= nil, "a second stray: kept aside as (2)")
+    H.ok(g.roster == "Ann, Bo" and g.copies.Newbie ~= nil, "the live roster stays; what is new is added")
+
+    -- (c) TWO REALMS, ONE GUILD NAME: one book, merged field by field
+    local A = raid({ pull(T0, 663, "Lucifron", { "Ann", "Bo" }) })
+    local B = raid({ pull(T0 + 20, 663, "Lucifron", { "Ann", "Bo", "Cid" }),        -- the same kill, a clock 20 s off
+                     pull(T0 + 1800, 664, "Magmadar", { "Ann", "Bo", "Cid" }) })
+    local X1 = raid({ pull(T0 - 5 * 86400, 663, "Lucifron", { "Ann" }) })
+    local X2 = raid({ pull(T0 - 5 * 86400 + 10, 663, "Lucifron", { "Ann" }) })
+    d = login({ forever10 = true, filedTo = "Realm 2|The Heathens", guilds = {
+        ["Realm 2|The Heathens"] = {
+            record = { nights = { ["2026-11-12 409"] = A, ["2026-11-07 409"] = X1 },
+                       gear = { Ann = { date = "2026-11-01", gear = { { id = 1 } } } }, archived = {}, restored = {} },
+            punctual = { ann = { [T0] = { d = 10 }, [T0 - 7 * 86400] = { d = 5 } } },
+            copies = { Gnar = { v = "1.0.0", t = 200 } },
+            loot = { lines = { "L1", "L2" }, meta = { [7] = { w = 1 } }, bad = { "x" } },
+        },
+        ["Realm 4|The Heathens"] = {
+            roster = "Cid",
+            record = { nights = { ["2026-11-12 409"] = B },
+                       gear = { Ann = { date = "2026-11-08", gear = { { id = 2 } } } },
+                       archived = { ["2026-11-07 409"] = { night = X2, t = 500, by = "Off" } }, restored = {} },
+            punctual = { ann = { [T0] = { d = 99 } }, bo = { [T0] = { d = 0 } } },
+            copies = { Gnar = { v = "0.5.2", t = 100 } },
+            loot = { lines = { "L2", "L3" }, meta = { [7] = { w = 3, direct = true } }, bad = { "y" }, importedFromBiSLoot = true },
+        },
+    } })
+    g = d.guilds["The Heathens"]
+    local rec = g.record
+    H.eq(count(rec.nights), 1, "the same raid seen on two realms is ONE night (merged kill by kill)")
+    local mc = rec.nights["2026-11-12 409"]
+    H.ok(mc and #mc.pulls == 2 and mc.raiders.Cid ~= nil, "with every pull either copy saw, and who was in it")
+    H.ok(rec.archived["2026-11-07 409"] ~= nil and rec.nights["2026-11-07 409"] == nil,
+         "a raid archived on one realm's book stays archived, the other realm's copy does not bring it back")
+    H.eq(rec.gear.Ann.date, "2026-11-08", "gear: the newer set wins")
+    H.eq(count(g.punctual.ann), 2, "punctuality: one verdict per raid start, never counted twice")
+    H.eq(g.punctual.ann[T0].d, 10, "and the first verdict stands (as L.Mark)")
+    H.ok(g.punctual.bo and g.punctual.bo[T0], "a raider only one book knew is added")
+    H.eq(g.copies.Gnar.v, "1.0.0", "versions: the newest heard wins")
+    H.eq(#g.loot.lines, 3, "loot lines: every line once")
+    H.ok(g.loot.meta[7].w == 3 and g.loot.meta[7].direct == true and #g.loot.bad == 2 and g.loot.importedFromBiSLoot == true,
+         "loot meta: the most witnesses, direct if either said so; bad lines kept; the import stamp kept")
+    H.eq(g.roster, "Cid", "the roster: the only one there")
+    H.eq(count(d.oldRealmBooks), 2, "both realm books kept aside")
+
+    -- (d) a save the bug never touched: just the realm book - folded the same way
+    d = login({ forever10 = true, guilds = { ["Dreamscythe|The Heathens"] = { roster = "Old, Paste" } } })
+    H.eq(d.guilds["The Heathens"] and d.guilds["The Heathens"].roster, "Old, Paste", "an untouched save: folded at login")
+    H.ok(d.guilds["Dreamscythe|The Heathens"] == nil and d.oldRealmBooks["Dreamscythe|The Heathens"] ~= nil, "and kept aside")
+
+    -- (e) a fresh install: one empty book under the guild's name, nothing kept aside
+    d = login(nil)
+    H.ok(type(d.guilds) == "table" and type(d.guilds["The Heathens"]) == "table", "a fresh install: the guild's book")
+    H.eq(d.oldRealmBooks, nil, "and no oldRealmBooks table at all")
+    H.eq(count(d.guilds), 1, "one book")
+
+    _G.BiSGuildDB, _G.GetUnitName, _G.GetGuildInfo, _G.IsInGuild = keep.db, keep.GUN, keep.GI, keep.IG
+    _G.BiSGuildReport, S.imported, NS.Loot.ledgers = keep.rep, keep.imported, keep.ledgers
+    NS.folded = {}
 end
 
 H.section("a night on the wire: small, and the same night after")
