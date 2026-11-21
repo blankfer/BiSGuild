@@ -86,21 +86,250 @@ end
 
 --- EACH GUILD ITS OWN BOOKS (Arn, 16 Oct: "some people have alts in other guilds - when I opened it on
 --- my hunter it still had the pasted JSON"). BiSGuildDB is the account's, every character shares it,
---- so the pasted roster, the raid record and the punctuality are filed per guild - realm and guild
---- name - and a character sees and SHARES only its own guild's. (A hunter that is an officer in
---- another guild would otherwise have announced the main's raid nights to that guild.) Settings -
---- logins, map dots, the logs folder - stay the account's.
+--- so the pasted roster, the raid record and the punctuality are filed per guild and a character sees
+--- and SHARES only its own guild's. (A hunter that is an officer in another guild would otherwise have
+--- announced the main's raid nights to that guild.) Settings - logins, map dots, the logs folder - stay
+--- the account's.
+---
+--- THE KEY IS THE GUILD NAME ALONE (21 Nov 2026). It was "<realm>|<guild>" (guildless "-|<realm>|<name>")
+--- until Forever 1.60.1 Live Update 2: "APIs that return realm names or IDs now instead return an empty
+--- string or zero" - GetRealmName answers "", so every book came up as "|<guild>", empty, beside the real
+--- one. No realm can be read any more, so none is used: "<guild>", and guildless "-|<whole name>" (Forever's
+--- "Name Surname" - UnitName is the first name only). The old books are folded in once - ns.Fold below.
 ---
 --- The client names your guild a moment after login. Until it has, ns.Books() is an unsaved, empty
 --- stand-in: an empty terminal for a second, never another guild's books.
+local function WholeName()
+    local n
+    if GetUnitName then
+        local ok, v = pcall(GetUnitName, "player", false)
+        if ok and type(v) == "string" and v ~= "" then n = v end
+    end
+    if not n and UnitName then
+        local ok, v = pcall(UnitName, "player")
+        if ok and type(v) == "string" and v ~= "" then n = v end
+    end
+    return n and (n:match("^([^%-]+)") or n) or nil
+end
+ns.WholeName = WholeName
+
 function ns.GuildKey()
     if not (IsInGuild and IsInGuild()) then
-        local me = UnitName and UnitName("player")
-        return me and ("-|" .. tostring(GetRealmName and GetRealmName() or "") .. "|" .. me) or nil
+        local me = WholeName()
+        return me and ("-|" .. me) or nil
     end
     local ok, name = pcall(GetGuildInfo, "player")
     if not ok or type(name) ~= "string" or name == "" then return nil end
-    return tostring(GetRealmName and GetRealmName() or "") .. "|" .. name
+    return name
+end
+
+--- Is `old` a book key from before 21 Nov that belongs to `key`? Old guild books were "<realm>|<guild>"
+--- (the realm "" since the change), old guildless ones "-|<realm>|<first name>". A guild or a whole name
+--- never holds a "|", so the shapes cannot be mistaken for each other or for a new key.
+function ns.OldKeyOf(old, key)
+    if type(old) ~= "string" or type(key) ~= "string" or old == key then return false end
+    local who = key:match("^%-|(.+)$")
+    if who then
+        local name = old:match("^%-|[^|]*|(.+)$")
+        return name ~= nil and (name == who or name == (who:match("^(%S+)") or who))
+    end
+    if old:sub(1, 2) == "-|" then return false end                    -- somebody's guildless book
+    return old:match("^[^|]*|(.+)$") == key
+end
+
+--- The stray book the bug made ("|<guild>", "-||<name>"): the newest of the old ones.
+local function stray(k) return k:sub(1, 1) == "|" or k:sub(1, 3) == "-||" end
+
+local function copy(v)
+    if type(v) ~= "table" then return v end
+    local out = {}
+    for k, x in pairs(v) do out[k] = copy(x) end
+    return out
+end
+
+local function keys(t, sorted)
+    local out = {}
+    for k in pairs(type(t) == "table" and t or {}) do out[#out + 1] = k end
+    if sorted then table.sort(out, function(a, b) return tostring(a) < tostring(b) end) end
+    return out
+end
+
+--- HOW ONE OLD BOOK FOLDS INTO THE LIVE ONE, field by field. What is live already wins a tie; the old books
+--- come stray first, then by realm name, so "first one in" is the stray, made after the change.
+local FOLD = {}
+--- The pasted roster is one text: the live one stays; with none, the first old one that has one.
+function FOLD.roster(g, v)
+    if type(v) == "string" and v ~= "" and (type(g.roster) ~= "string" or g.roster == "") then g.roster = v end
+end
+--- Punctuality, [name][raid start] = verdict: one verdict per raid start, the first stands (Logins.lua
+--- L.Mark), the newest L.KEEP starts kept per person.
+function FOLD.punctual(g, v)
+    if type(v) ~= "table" then return end
+    if type(g.punctual) ~= "table" then g.punctual = {} end
+    local keepN = (ns.Login and ns.Login.KEEP) or 8
+    for name, starts in pairs(v) do
+        if type(starts) == "table" then
+            local p = g.punctual[name]
+            if type(p) ~= "table" then p = {} g.punctual[name] = p end
+            for start, e in pairs(starts) do
+                if p[start] == nil then p[start] = e end
+            end
+            local list = keys(p)
+            table.sort(list, function(a, b) return (tonumber(a) or 0) < (tonumber(b) or 0) end)
+            for i = 1, #list - keepN do p[list[i]] = nil end
+        end
+    end
+end
+--- Guildmates' versions, [name] = { v, t }: the one heard last wins.
+function FOLD.copies(g, v)
+    if type(v) ~= "table" then return end
+    if type(g.copies) ~= "table" then g.copies = {} end
+    for name, c in pairs(v) do
+        local have = g.copies[name]
+        if type(c) == "table" and (type(have) ~= "table" or (tonumber(c.t) or 0) > (tonumber(have.t) or 0)) then
+            g.copies[name] = c
+        end
+    end
+end
+--- The loot ledger's lines: every line once (the ledger itself sorts duplicates and forks out at load,
+--- Loot.lua LT.Ledger); meta per event: the most witnesses, direct if either said so; bad lines kept, the
+--- newest LT.BAD_KEEP; BiS Loot's import stamp kept if either has it.
+function FOLD.loot(g, v)
+    if type(v) ~= "table" then return end
+    if type(g.loot) ~= "table" then g.loot = {} end
+    local L = g.loot
+    if type(L.lines) ~= "table" then L.lines = {} end
+    if type(L.meta) ~= "table" then L.meta = {} end
+    if type(L.bad) ~= "table" then L.bad = {} end
+    local held = {}
+    for _, line in ipairs(L.lines) do held[line] = true end
+    for _, line in ipairs(type(v.lines) == "table" and v.lines or {}) do
+        if not held[line] then held[line] = true L.lines[#L.lines + 1] = line end
+    end
+    for id, m in pairs(type(v.meta) == "table" and v.meta or {}) do
+        if type(m) == "table" then
+            local have = L.meta[id]
+            if type(have) ~= "table" then
+                L.meta[id] = m
+            else
+                have.w = math.max(tonumber(have.w) or 0, tonumber(m.w) or 0)
+                have.direct = (have.direct == true or m.direct == true) or nil
+            end
+        end
+    end
+    for _, line in ipairs(type(v.bad) == "table" and v.bad or {}) do L.bad[#L.bad + 1] = line end
+    local keepN = (ns.Loot and ns.Loot.BAD_KEEP) or 50
+    while #L.bad > keepN do table.remove(L.bad, 1) end
+    if v.importedFromBiSLoot then L.importedFromBiSLoot = true end
+    for k, x in pairs(v) do
+        if L[k] == nil then L[k] = x end
+    end
+end
+--- The raid record, by Store.lua's own rules (S.Record() is this live book - its key is folded already):
+--- gear, the newer set wins (S.PutGear); an archive and a restore of one key, the later decision wins; then
+--- every night through S.Put - the same raid seen twice merges kill by kill, a copy of an archived raid
+--- stays out, a whole-date night never sits beside raids of its date.
+function FOLD.record(g, r)
+    if type(r) ~= "table" then return end
+    local S = ns.S
+    if not S then
+        if g.record == nil then g.record = r end
+        return
+    end
+    local rec = S.Record()
+    for _, name in ipairs(keys(r.gear, true)) do
+        local have = r.gear[name]
+        if type(have) == "table" then S.PutGear(name, have.date, have.gear) end
+    end
+    local back = {}                              -- archived raids a later restore brings back
+    for _, k in ipairs(keys(r.restored, true)) do
+        local t = tonumber(r.restored[k])
+        if t and t > (tonumber(rec.restored[k]) or 0) then
+            rec.restored[k] = t
+            local a = rec.archived[k]
+            if type(a) == "table" and t > (tonumber(a.t) or 0) then
+                rec.archived[k] = nil
+                back[#back + 1] = { k, a.night }
+            end
+        end
+    end
+    for _, k in ipairs(keys(r.archived, true)) do
+        local a = r.archived[k]
+        if type(a) == "table" then
+            local t, have = tonumber(a.t) or 0, rec.archived[k]
+            if (tonumber(rec.restored[k]) or 0) > t then
+                back[#back + 1] = { k, a.night }
+            elseif type(have) ~= "table" or t > (tonumber(have.t) or 0) then
+                rec.archived[k] = a
+                rec.restored[k] = nil
+                for _, k2 in ipairs(keys(rec.nights)) do
+                    if k2 == k or S.SameRaid(rec.nights[k2], a.night) then rec.nights[k2] = nil end
+                end
+            end
+        end
+    end
+    for _, k in ipairs(keys(r.nights, true)) do
+        local n = r.nights[k]
+        if type(n) == "table" then S.Put(k, n, n.by) end
+    end
+    for _, b in ipairs(back) do
+        if type(b[2]) == "table" then S.Put(b[1], b[2], b[2].by) end
+    end
+    for k, x in pairs(r) do
+        if rec[k] == nil then rec[k] = x end
+    end
+end
+
+--- Fold one old book (a copy - the original is kept aside) into the live one. A field with no rule is taken
+--- when the live book has none.
+function ns.FoldBook(g, b)
+    for _, field in ipairs(keys(b, true)) do
+        if FOLD[field] then FOLD[field](g, b[field])
+        elseif g[field] == nil then g[field] = b[field] end
+    end
+end
+
+--- THE FOLD, once per key per session (21 Nov 2026): every old book of this guild - any realm, and the stray
+--- "|<guild>" - is folded into "<guild>", then moved to BiSGuildDB.oldRealmBooks under its old key (never
+--- deleted; a key already there gets " (2)"). Idempotent: a folded book is no longer in `guilds`, so the next
+--- login finds nothing to fold. Two guilds of one name on two realms become one book - the client cannot tell
+--- them apart any more. Answers how many books were folded.
+ns.folded = {}
+function ns.Fold(d, key)
+    if not key or ns.folded[key] then return 0 end
+    ns.folded[key] = true
+    if type(d) ~= "table" or type(d.guilds) ~= "table" then return 0 end
+    local olds = {}
+    for k in pairs(d.guilds) do
+        if ns.OldKeyOf(k, key) then olds[#olds + 1] = k end
+    end
+    if #olds == 0 then return 0 end
+    table.sort(olds, function(a, b)
+        local sa, sb = stray(a), stray(b)
+        if sa ~= sb then return sa end
+        return a < b
+    end)
+    local g = d.guilds[key]
+    if type(g) ~= "table" then g = {} d.guilds[key] = g end
+    if type(d.oldRealmBooks) ~= "table" then d.oldRealmBooks = {} end
+    for _, k in ipairs(olds) do
+        local book = d.guilds[k]
+        d.guilds[k] = nil
+        if type(book) == "table" then ns.FoldBook(g, copy(book)) end
+        local aside, n = k, 1
+        while d.oldRealmBooks[aside] ~= nil do
+            n = n + 1
+            aside = k .. " (" .. n .. ")"
+        end
+        d.oldRealmBooks[aside] = book
+    end
+    return #olds
+end
+
+--- At login and when the guild is named: fold now, so the books are live before anything asks for them.
+function ns.FoldNow()
+    local key = ns.GuildKey()
+    if key and not ns.folded[key] then ns.Books() end
 end
 
 ns.unfiled = {}
@@ -109,6 +338,7 @@ function ns.Books()
     if not key then return ns.unfiled end
     local d = db()
     if type(d.guilds) ~= "table" then d.guilds = {} end
+    ns.Fold(d, key)
     local g = d.guilds[key]
     if not g then
         g = {}
@@ -179,6 +409,7 @@ end
 local f = CreateFrame("Frame")
 f:RegisterEvent("ADDON_LOADED")
 f:RegisterEvent("PLAYER_LOGOUT")
+f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_GUILD_UPDATE")
 f:RegisterEvent("GUILD_ROSTER_UPDATE")
 f:SetScript("OnEvent", function(_, event, name)
@@ -202,7 +433,11 @@ f:SetScript("OnEvent", function(_, event, name)
     -- are in it (16 Oct: an alt in another guild must not take in the main's raids) - Store.lua
     if ns.S then ns.S.ImportWhenReady() end
     if ns.X then ns.X.Boot() end
+  elseif event == "PLAYER_LOGIN" then
+    ns.FoldNow()                     -- the old realm books, folded before anything asks (21 Nov; a guildless
+                                     -- character may never hear PLAYER_GUILD_UPDATE)
   elseif event == "PLAYER_GUILD_UPDATE" or event == "GUILD_ROSTER_UPDATE" then
+    ns.FoldNow()
     if ns.S then ns.S.ImportWhenReady() end
   elseif event == "PLAYER_LOGOUT" then
     ns.Comm.Save()
