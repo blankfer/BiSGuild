@@ -425,6 +425,11 @@ function L.Paint()
 end
 
 function L.Show()
+    -- the phone's own card is in front of you: one or the other (Core/DeckApp.lua)
+    if ns.DeckApp and ns.DeckApp.LoginSeen() then
+        if ns.DeckApp.login.Dirty then ns.DeckApp.login:Dirty() end
+        return
+    end
     L.Build()
     L.Paint()
 end

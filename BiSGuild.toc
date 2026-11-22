@@ -42,4 +42,5 @@ Core\Logins.lua
 Core\Loot.lua
 API.lua
 Core\Options.lua
+Core\DeckApp.lua
 Core\Say.lua

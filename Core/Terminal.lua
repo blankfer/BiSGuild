@@ -958,6 +958,7 @@ end
 --------------------------------------------------------------------
 
 local function Say(text, colour)
+    K.said, K.saidAt = text, GetTime and GetTime() or 0        -- (the phone says it too: Core/DeckApp.lua)
     local f = K.frame
     if not f then return end
     f.status:SetText(text or "")
