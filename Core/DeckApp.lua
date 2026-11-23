@@ -138,6 +138,13 @@ local function wellFed()
     end
     return "Well Fed"
 end
+--- An item's picture by its id, or nil (the colour pass, 22 Nov: gear and loot rows wear their icons).
+function A.Icon(id)
+    id = tonumber(id)
+    if not id or id == 0 then return nil end
+    local _, _, _, _, icon = ask((C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant, id)
+    return icon
+end
 --- What an item is to us: a flask or elixir, a food that leaves you Well Fed, or nothing. Asked once (a blank text: asked again).
 function A.Item(id)
     local it = items[id]
@@ -397,7 +404,7 @@ local function raiderPage(name)
             local id = type(g) == "table" and tonumber(g[1]) or 0
             if id ~= 0 then
                 local item, q = ns.K.Item(id)
-                out[#out + 1] = { mark = bad[slot] and "!" or "-", text = item or slot, tint = QUALITY[q or 1], sub = low(slot) .. ", level " .. tostring(g[2] or "?"), right = bad[slot] and bad[slot]:upper() or "", ink = "warn" }
+                out[#out + 1] = { pic = A.Icon(id), mark = not A.Icon(id) and (bad[slot] and "!" or "-") or nil, text = item or slot, tint = QUALITY[q or 1], sub = low(slot) .. ", level " .. tostring(g[2] or "?"), right = bad[slot] and bad[slot]:upper() or "", ink = "warn" }
             end
         end
     end
@@ -406,7 +413,7 @@ local function raiderPage(name)
         out[#out + 1] = { head = true, text = "LOOT", right = plural(#loot, "item") }
         for i = 1, math.min(8, #loot) do
             local item, q = ns.K.Item(loot[i].item)
-            out[#out + 1] = { mark = "*", text = item or "an item", tint = QUALITY[q or 1], sub = loot[i].boss or "", right = "" }
+            out[#out + 1] = { pic = A.Icon(loot[i].item), mark = not A.Icon(loot[i].item) and "*" or nil, text = item or "an item", tint = QUALITY[q or 1], sub = loot[i].boss or "", right = "" }
         end
     end
     return out
