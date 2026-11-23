@@ -57,6 +57,12 @@ Read ../_bisdev/CLAUDE.md first.
   switch, "open the terminal", `/bisg`), login pop-up, map dots, the BiS channel (share my spot as its row), version
   note. `O.Model().onChange` repaints the options window when it is open. **No minimap button** - never had one, so no
   right-click to fix; `/bisg` and the BiS> page are the doors.
+- `Core/DeckApp.lua` (`ns.DeckApp`, 22 Nov 2026): the guild on the phone (BiSTheme's deck, which comes with BiS Tools; without it
+  nothing runs) - data only, `BiSTheme.Deck.Register` at PLAYER_LOGIN as `BiSGuild:app` (TONIGHT / RAIDERS / BOSSES / SETTINGS) and
+  the card `BiSGuild:login` (Login's waiting list; `A.LoginSeen` = the phone's home is open, so `L.Show` steps aside). Lists kept
+  `A.LOOK` s (`A.Drop` after a press). YOUR BUFFS: own auras + bags, out of a fight; flask = an item whose own spell is the buff,
+  food = its spell's text names the Well Fed buff. Invites only through `I.Send` / `I.One`; `K.said` = the terminal's last line.
+  Tests: `dev/deckapp.lua` (a stand-in deck that reads every part as the painter does).
 - **Books keyed by the guild name alone (21 Nov 2026)**: `BiSGuildDB.guilds[ns.GuildKey()]` is `"<guild>"`, guildless
   `"-|<whole name>"` (`ns.WholeName`, GetUnitName first). It was `"<realm>|<guild>"` until Forever 1.60.1 Live Update 2
   made every realm API answer `""`/0. `ns.Fold` (once per key per session, from `ns.Books()` and `ns.FoldNow()` at

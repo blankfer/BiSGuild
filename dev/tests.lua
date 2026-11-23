@@ -3856,4 +3856,6 @@ do
     _G.SlashCmdList.BISGUILD("help")
 end
 
+dofile(HERE .. "/deckapp.lua")(H, NS)
+
 H.report()
